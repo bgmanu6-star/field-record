@@ -258,7 +258,7 @@ function toast(msg,ms=2200){const t=$('#toast');t.innerHTML=`<div>${esc(msg)}</d
 function modal(html){$('#modal').innerHTML=`<div class="bg"><div class="sheet">${html}</div></div>`;$('#modal .bg').onclick=e=>{if(e.target.classList.contains('bg'))closeModal()}}
 function closeModal(){$('#modal').innerHTML=''}
 
-/* ================= SETTINGS ================= */
+/* ================= STORED SETTINGS ================= */
 const S=Object.assign({
   user:'',phone:'',waNumber:'',openingDefault:60,rate:3.5,lowFuel:30,
   sites:DEFAULT_SITES.map((n,i)=>({id:'s'+(i+1),name:n})),
@@ -266,10 +266,25 @@ const S=Object.assign({
 },JSON.parse(localStorage.getItem('fr_settings')||'{}'));
 if(!S.firebase&&!localStorage.getItem('fr_fb_off'))S.firebase=BUILTIN_FIREBASE;
 // add any new default sites missing from stored list (upgrade path)
-DEFAULT_SITES.forEach((n,i)=>{const id='s'+(i+1);if(!S.sites.find(s=>s.id===id))S.sites.push({id,name:n})});
+if(!S.sitesAt)DEFAULT_SITES.forEach((n,i)=>{const id='s'+(i+1);if(!S.sites.find(s=>s.id===id))S.sites.push({id,name:n})});
 function saveS(){localStorage.setItem('fr_settings',JSON.stringify(S))}
 saveS();
 const siteById=id=>S.sites.find(s=>s.id===id);
+const activeSites=()=>S.sites.filter(s=>!s.hidden);
+/* per-site settings, falling back to the global defaults */
+function siteCfg(sid){const s=siteById(sid)||{};const n=(v,d)=>isNum(v)?+v:d;
+  return {rate:n(s.rate,S.rate),opening:n(s.opening,S.openingDefault),tank:n(s.tank,0),low:n(s.low,S.lowFuel),
+    method:s.method||'consumption',ops:Array.isArray(s.ops)&&s.ops.length?OPS.filter(o=>s.ops.includes(o)):OPS.slice(),wa:s.wa||S.waNumber||''}}
+/* site list + per-site settings are shared with all phones through a 'config' record */
+function applySiteConfig(rec){
+  if(!rec||rec.type!=='config'||!Array.isArray(rec.data&&rec.data.sites))return false;
+  if((S.sitesAt||0)>=(rec.updatedAt||0))return false;
+  S.sites=rec.data.sites;S.sitesAt=rec.updatedAt||Date.now();saveS();return true;
+}
+async function saveSiteConfig(){
+  const rec={id:'config-sites',type:'config',site:'',siteName:'',dt:nowLocal(),user:S.user,createdAt:Date.now(),deleted:false,data:{sites:JSON.parse(JSON.stringify(S.sites))},src:{}};
+  await putRec(rec);S.sitesAt=rec.updatedAt;saveS();
+}
 const siteName=id=>(siteById(id)||{}).name||id;
 
 /* ================= LOCAL DB (IndexedDB) ================= */
@@ -279,7 +294,7 @@ all(){return new Promise(res=>{const q=this.db.transaction('records').objectStor
 put(rec){return new Promise((res,rej)=>{const t=this.db.transaction('records','readwrite');t.objectStore('records').put(rec);t.oncomplete=()=>res();t.onerror=()=>rej(t.error)})}
 };
 let RECS=[];
-const live=()=>RECS.filter(r=>!r.deleted);
+const live=()=>RECS.filter(r=>!r.deleted&&r.type!=='config');
 let PENDING=new Set(JSON.parse(localStorage.getItem('fr_pending')||'[]'));
 const savePending=()=>localStorage.setItem('fr_pending',JSON.stringify([...PENDING]));
 async function putRec(rec,{fromRemote=false}={}){
@@ -287,6 +302,7 @@ async function putRec(rec,{fromRemote=false}={}){
   await DB.put(rec);
   const i=RECS.findIndex(r=>r.id===rec.id);if(i>=0)RECS[i]=rec;else RECS.push(rec);
   if(!fromRemote){Sync.push()}
+  else if(rec.type==='config'&&applySiteConfig(rec)&&!/^#\/(diesel|energy|request)\/|^#\/msg/.test(location.hash))setTimeout(route,0);
   status();
 }
 
@@ -331,6 +347,7 @@ async load(){
   if(this.loaded)return;
   await loadScript(CDN.fbApp);await loadScript(CDN.fbAuth);await loadScript(CDN.fbStore);
   if(!firebase.apps.length)firebase.initializeApp(S.firebase);
+  try{await firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL)}catch(e){}
   this.db=firebase.firestore();this.loaded=true;
 },
 async init(){
@@ -343,12 +360,12 @@ async init(){
         ACCOUNT={name:u.displayName||'',email:u.email||'',photo:u.photoURL||''};
         localStorage.setItem('fr_account',JSON.stringify(ACCOUNT));
         if(!S.user){S.user=ACCOUNT.name;saveS()}
-        this.ready=true;this.err='';this.listen();await this.push();
-        if(location.hash==='#/login')location.hash='#/';
+        this.ready=true;this.err='';this.needLogin=false;this.listen();await this.push();
+        if(location.hash==='#/login')location.hash='#/';else if(!/^#\/(diesel|energy|request)\/|^#\/msg/.test(location.hash))route();
       }else{
         this.ready=false;if(this.unsub){this.unsub();this.unsub=null}
-        if(ACCOUNT){ACCOUNT=null;localStorage.removeItem('fr_account')}
-        route();
+        // keep the cached account so the app opens normally; just flag that sync needs a sign-in
+        if(ACCOUNT)this.needLogin=true;else route();
       }
       status();
     });
@@ -358,11 +375,7 @@ async init(){
 async login(){
   await this.load();
   const p=new firebase.auth.GoogleAuthProvider();p.setCustomParameters({prompt:'select_account'});
-  try{await firebase.auth().signInWithPopup(p)}
-  catch(e){
-    if(['auth/popup-blocked','auth/operation-not-supported-in-this-environment','auth/cancelled-popup-request'].includes(e.code))return firebase.auth().signInWithRedirect(p);
-    throw e;
-  }
+  await firebase.auth().signInWithPopup(p);
 },
 async logout(){if(this.loaded)await firebase.auth().signOut();ACCOUNT=null;localStorage.removeItem('fr_account');location.hash='#/login';route()},
 listen(){
@@ -406,6 +419,7 @@ function status(){
   else if(!navigator.onLine)h=`<span class="dot off"></span>Offline${PENDING.size?' · '+PENDING.size:''}`;
   else if(!S.firebase)h='<span class="dot wait"></span>Local only';
   else if(!ACCOUNT)h='<span class="dot wait"></span>Not signed in';
+  else if(Sync.needLogin)h='<span class="dot wait"></span>Tap to sign in';
   else if(Sync.err)h='<span class="dot off"></span>Sync error';
   else if(PENDING.size)h=`<span class="dot wait"></span>${PENDING.size} pending`;
   else h='<span class="dot"></span>Synced';
@@ -414,8 +428,9 @@ function status(){
 
 /* ================= LAYOUT ================= */
 function header(title,back){
-  return `<div class="hd">${back?`<button class="ib" onclick="goBack('${back}')">${I.back}</button>`:'<div style="width:6px"></div>'}<h1>${esc(title)}</h1><div class="chip" id="sync" onclick="location.hash='#/settings'"></div></div>`;
+  return `<div class="hd">${back?`<button class="ib" onclick="goBack('${back}')">${I.back}</button>`:'<div style="width:6px"></div>'}<h1>${esc(title)}</h1><div class="chip" id="sync" onclick="chipTap()"></div></div>`;
 }
+function chipTap(){location.hash=Sync.needLogin?'#/login':'#/settings'}
 function goBack(fallback){location.hash=fallback}
 function nav(active){
   const it=[['#/','Home',I.home,'home'],['#/dash','Dashboard',I.dash,'dash'],['#/history','History',I.hist,'history'],['#/settings','Settings',I.set,'settings']];
@@ -428,8 +443,8 @@ function route(){
   closeModal();
   const p=(location.hash||'#/').slice(2).split('/');
   const [a,b]=p;
-  if(S.firebase&&!ACCOUNT)return LoginPage();
-  if(!a||a==='login')return Home();
+  if(a==='login'||(S.firebase&&!ACCOUNT))return LoginPage();
+  if(!a)return Home();
   if(a==='diesel')return b?DieselPage(b):SiteList('diesel');
   if(a==='energy')return b?EnergyPage(b):SiteList('energy');
   if(a==='request')return b?RequestPage(b):SiteList('request');
@@ -442,10 +457,23 @@ function route(){
 window.addEventListener('hashchange',route);
 
 /* ================= LOGIN ================= */
+const UA=navigator.userAgent||'';
+const IS_IOS=/iPhone|iPad|iPod/.test(UA)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+const IN_APP=/WhatsApp|FBAN|FBAV|FB_IAB|Instagram|Line\/|Snapchat|Telegram|; wv\)/i.test(UA)||(IS_IOS&&!/Safari\//.test(UA)&&!window.navigator.standalone);
+function inAppHelp(){
+  const br=IS_IOS?'Safari':'Chrome';
+  return `<div class="warn" style="text-align:left;display:block;font-weight:500">
+    <b style="display:block;margin-bottom:6px">⚠️ Please open this app in ${br}</b>
+    Google sign-in does not work inside WhatsApp or other app browsers.<br><br>
+    ${IS_IOS?'1. Tap <b>•••</b> or the <b>compass / share icon</b> at the bottom<br>2. Choose <b>Open in Safari</b> (or Open in Browser)':'1. Tap <b>⋮</b> at the top-right<br>2. Choose <b>Open in Chrome</b>'}<br>
+    3. Then tap Sign in with Google there
+    <button class="btn b-gr mt" style="width:100%" onclick="navigator.clipboard.writeText(location.href.split('#')[0]).then(()=>toast('Link copied – paste it in ${br}'))">${I.copy}Copy app link</button></div>`;
+}
 function LoginPage(){
   $('#app').innerHTML=`<div class="hero" style="padding:60px 16px 70px"><img class="applogo" src="icon-192.png" alt=""><h1>FIELD RECORD</h1><p>DG • Energy • Diesel Management</p></div>
   <div class="wrap" style="margin-top:-28px;position:relative">
     <div class="card" style="background:#fff;box-shadow:0 4px 18px rgba(0,0,0,.08);text-align:center;padding:22px 16px">
+      ${IN_APP?inAppHelp():''}
       <h3 style="font-size:18px;margin-bottom:6px">Sign in to continue</h3>
       <div class="hint" style="margin-bottom:18px">Use your Gmail ID. Records are saved with your name and shared with your team.</div>
       <button class="btn" id="gbtn" style="width:100%;background:#fff;border:1.5px solid #dadce0;color:#3c4043">
@@ -459,11 +487,16 @@ function LoginPage(){
   $('#gbtn').onclick=async()=>{
     $('#lerr').textContent='';$('#gbtn').disabled=true;$('#gbtn').lastChild.textContent=' Signing in…';
     try{await Sync.login()}catch(e){
-      const m={'auth/unauthorized-domain':'This website address is not authorised in Firebase (Authentication → Settings → Authorised domains).','auth/popup-closed-by-user':'Sign-in window was closed. Try again.','auth/network-request-failed':'No internet connection.','auth/operation-not-allowed':'Google sign-in is not enabled in Firebase yet.'}[e.code];
+      const m={'auth/unauthorized-domain':'This website address is not authorised in Firebase (Authentication → Settings → Authorised domains).','auth/popup-closed-by-user':'Sign-in window was closed. Try again.','auth/network-request-failed':'No internet connection.','auth/operation-not-allowed':'Google sign-in is not enabled in Firebase yet.',
+        'auth/popup-blocked':IS_IOS?'Pop-up was blocked. iPhone: Settings → Safari → turn OFF "Block Pop-ups", then try again.':'Pop-up was blocked. Allow pop-ups for this site in Chrome and try again.',
+        'auth/operation-not-supported-in-this-environment':'This browser cannot sign in. Open the link in '+(IS_IOS?'Safari':'Chrome')+'.',
+        'auth/web-storage-unsupported':'Browser storage is blocked. Open in '+(IS_IOS?'Safari':'Chrome')+' and turn off Private browsing.'}[e.code];
+      if(IN_APP&&!m){$('#lerr').innerHTML='Sign-in failed inside this app browser. Follow the steps above to open in '+(IS_IOS?'Safari':'Chrome')+'.';return reset()}
       $('#lerr').textContent=m||e.message;
     }
-    if($('#gbtn')){$('#gbtn').disabled=false;$('#gbtn').lastChild.textContent=' Sign in with Google'}
+    reset();
   };
+  function reset(){if($('#gbtn')){$('#gbtn').disabled=false;$('#gbtn').lastChild.textContent=' Sign in with Google'}}
 }
 
 /* ================= HOME ================= */
@@ -472,14 +505,14 @@ function Home(){
   const tD=live().filter(r=>r.type==='diesel'&&dayOf(r.dt)===today).length;
   const tE=live().filter(r=>r.type==='energy'&&dayOf(r.dt)===today).length;
   render(`
-  <div class="hero"><div class="top"><div class="chip" id="sync" onclick="location.hash='#/settings'"></div></div>
+  <div class="hero"><div class="top"><div class="chip" id="sync" onclick="chipTap()"></div></div>
     <img class="applogo" src="icon-192.png" alt=""><h1>FIELD RECORD</h1><p>DG • Energy • Diesel Management</p></div>
   <div class="menu">
     <button class="mcard m-g" onclick="location.hash='#/diesel'"><div class="ic">${I.fuel}</div><div><b>Diesel Filling</b><span>Record diesel filling and DG hours</span></div><span class="ar">${I.chev}</span></button>
     <button class="mcard m-b" onclick="location.hash='#/energy'"><div class="ic">${I.meter}</div><div><b>Energy Reading</b><span>EB meter and operator readings</span></div><span class="ar">${I.chev}</span></button>
     <button class="mcard m-o" onclick="location.hash='#/request'"><div class="ic">${I.wa}</div><div><b>Make Diesel Request Message</b><span>Generate and share via WhatsApp</span></div><span class="ar">${I.chev}</span></button>
   </div>
-  <div class="qs"><div><b>${S.sites.length}</b><span>Sites</span></div><div><b>${tD}</b><span>Diesel today</span></div><div><b>${tE}</b><span>Energy today</span></div></div>
+  <div class="qs"><div><b>${activeSites().length}</b><span>Sites</span></div><div><b>${tD}</b><span>Diesel today</span></div><div><b>${tE}</b><span>Energy today</span></div></div>
   ${!S.user?`<div class="wrap" style="padding-top:0"><div class="note">Tip: set your name in <a href="#/settings">Settings</a> so records show who entered them.</div></div>`:''}
   ${footer(false)}
   `,'home');
@@ -489,7 +522,7 @@ function Home(){
 function SiteList(mode){
   const t={diesel:'Diesel Filling',energy:'Energy Reading',request:'Make Diesel Request'}[mode];
   const acc={diesel:'',energy:'acc-b',request:'acc-o'}[mode];
-  const items=S.sites.map((s,i)=>{
+  const items=activeSites().map((s,i)=>{
     const type=mode==='request'?'diesel':mode;const rs=recsOf(s.id,type);const last=rs[rs.length-1];
     let sub=last?`Last: ${fmtD(last.dt)}`:'No records yet';
     if(last&&mode!=='energy'&&isNum(last.data.closing))sub+=` · Fuel ${fmtN(last.data.closing,1)} L`;
@@ -512,55 +545,78 @@ function setSrc(F,key,src){
 }
 
 /* ================= OCR ================= */
-let ocrWorker=null;
-async function getWorker(){
-  if(ocrWorker)return ocrWorker;
-  await loadScript(CDN.tess);
-  ocrWorker=await Tesseract.createWorker('eng');
-  await ocrWorker.setParameters({tessedit_char_whitelist:'0123456789.',tessedit_pageseg_mode:'7'});
-  return ocrWorker;
+let ocrWorker=null,ocrInit=null,ocrProg='';
+const TESS_CORE='https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1/tesseract-core-lstm.wasm.js';
+function withTimeout(pr,ms,msg){return Promise.race([pr,new Promise((_,rej)=>setTimeout(()=>rej(new Error(msg)),ms))])}
+function ocrLog(m){
+  if(m.status){const pct=m.progress?Math.round(m.progress*100):0;
+    const label={'loading tesseract core':'Downloading OCR engine','initializing tesseract':'Starting OCR','loading language traineddata':'Downloading digit data','initializing api':'Preparing','recognizing text':'Reading digits'}[m.status]||m.status;
+    ocrProg=`${label}${pct?` ${pct}%`:''}…`;const el=$('#ocrst');if(el)el.textContent=ocrProg;const bar=$('#ocrbar');if(bar)bar.style.width=(pct||5)+'%'}
 }
+function getWorker(){
+  if(ocrWorker)return Promise.resolve(ocrWorker);
+  if(ocrInit)return ocrInit;
+  ocrInit=(async()=>{
+    await loadScript(CDN.tess);
+    // LSTM-only engine (oem 1) + non-SIMD core: smaller download, works on all iPhones/Android
+    const w=await withTimeout(Tesseract.createWorker('eng',1,{corePath:TESS_CORE,logger:ocrLog}),120000,'OCR engine download timed out. Check internet and try again.');
+    await w.setParameters({tessedit_char_whitelist:'0123456789.',tessedit_pageseg_mode:'7'});
+    ocrWorker=w;return w;
+  })().catch(e=>{ocrInit=null;throw e});
+  return ocrInit;
+}
+/* warm up in background so the first scan is fast */
+function preloadOCR(){if(navigator.onLine&&!ocrWorker&&!ocrInit&&!localStorage.getItem('fr_noocr'))setTimeout(()=>getWorker().catch(()=>{}),1500)}
 function prepImage(file){
   return new Promise((res,rej)=>{const img=new Image();img.onload=()=>{
-    const sc=Math.min(1,1400/Math.max(img.width,img.height));const w=Math.round(img.width*sc),h=Math.round(img.height*sc);
+    const sc=Math.min(1,1100/Math.max(img.width,img.height));const w=Math.round(img.width*sc),h=Math.round(img.height*sc);
     const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');x.drawImage(img,0,0,w,h);
     const orig=c.toDataURL('image/jpeg',.85);
     const d=x.getImageData(0,0,w,h),p=d.data;let sum=0;
     for(let i=0;i<p.length;i+=4){const g=.299*p[i]+.587*p[i+1]+.114*p[i+2];p[i]=p[i+1]=p[i+2]=g;sum+=g}
-    const avg=sum/(p.length/4);
-    // dark digits on light LCD -> keep; light digits on dark -> invert
-    const inv=avg<110;
+    const avg=sum/(p.length/4);const inv=avg<110;
     for(let i=0;i<p.length;i+=4){let g=p[i];if(inv)g=255-g;g=g<(inv?255-avg:avg)*0.85?0:255;p[i]=p[i+1]=p[i+2]=g}
     x.putImageData(d,0,0);res({orig,proc:c.toDataURL('image/png')});URL.revokeObjectURL(img.src)};
-    img.onerror=rej;img.src=URL.createObjectURL(file)});
+    img.onerror=()=>rej(new Error('Could not open the photo. Try again.'));img.src=URL.createObjectURL(file)});
 }
 function pickNumber(text){
   const m=(text||'').replace(/\s+/g,'').match(/\d+(\.\d+)?/g)||[];
   return m.sort((a,b)=>b.replace('.','').length-a.replace('.','').length)[0]||'';
 }
-/* opens camera; cb(value) */
+/* opens camera; cb(value,target) */
 function openOCR(title,cb,choices){
   const inp=$('#camIn');inp.value='';
   inp.onchange=async()=>{
     const f=inp.files[0];if(!f)return;
-    let target=choices?choices[0]:null;
-    modal(`<h3>${esc(title)}</h3><div class="loader"><div class="spin"></div>Reading meter…</div>`);
-    try{
-      const {orig,proc}=await prepImage(f);
-      modal(`<h3>${esc(title)}</h3><img class="ocrimg" src="${orig}"><div class="loader" id="ocrl"><div class="spin"></div>Recognising digits… (first use downloads OCR data)</div><div id="ocrr"></div>`);
-      const w=await getWorker();
-      let r=await w.recognize(proc);let v=pickNumber(r.data.text);
-      if(!v){r=await w.recognize(orig);v=pickNumber(r.data.text)}
-      $('#ocrl').remove();
+    let target=choices?choices[0]:null,done=false;
+    modal(`<h3>${esc(title)}</h3><div class="loader"><div class="spin"></div>Opening photo…</div>`);
+    let orig,proc;
+    try{({orig,proc}=await prepImage(f))}catch(e){return modal(`<h3>Camera</h3><div class="warn">${I.alert}${esc(e.message)}</div><button class="btn b-gr" onclick="closeModal()">Close</button>`)}
+    const result=(v,msg)=>{
+      if(done)return;done=true;
+      $('#ocrl')&&$('#ocrl').remove();
       $('#ocrr').innerHTML=`<div class="lbl mt">Detected Reading</div>
-        <input class="inp" id="ocrv" type="number" inputmode="decimal" step="any" value="${esc(v)}" placeholder="Not detected – type it">
-        <div class="hint">${v?'Check the value against the meter and correct if needed.':'Could not read the digits clearly. Retake closer, or type the value.'}</div>
-        ${choices?`<div class="lbl mt">Apply to</div><div class="opts">${choices.map((c,i)=>`<button data-ch="${c}" class="${i?'':'on'}">${c}</button>`).join('')}</div>`:''}
+        <input class="inp" id="ocrv" type="number" inputmode="decimal" step="any" value="${esc(v)}" placeholder="Type the reading from the photo">
+        <div class="hint">${msg}</div>
+        ${choices?`<div class="lbl mt">Apply to</div><div class="opts">${choices.map((c,i)=>`<button data-ch="${c}" class="${c===target?'on':''}">${c}</button>`).join('')}</div>`:''}
         <div class="btns"><button class="btn b-gr" id="ocrRe">${I.cam}Retake</button><button class="btn b-g" id="ocrUse">${I.ok}Use Reading</button></div>`;
       $$('[data-ch]').forEach(b=>b.onclick=()=>{$$('[data-ch]').forEach(x=>x.classList.remove('on'));b.classList.add('on');target=b.dataset.ch});
       $('#ocrRe').onclick=()=>{closeModal();openOCR(title,cb,choices)};
       $('#ocrUse').onclick=()=>{const val=$('#ocrv').value;if(!isNum(val))return toast('Enter a valid number');closeModal();cb(val,target)};
-    }catch(e){modal(`<h3>Camera OCR</h3><div class="warn">${I.alert}${esc(e.message||e)}</div><button class="btn b-gr" onclick="closeModal()">Close</button>`)}
+      if(!v)setTimeout(()=>$('#ocrv')&&$('#ocrv').focus(),100);
+    };
+    modal(`<h3>${esc(title)}</h3><img class="ocrimg" src="${orig}">
+      <div id="ocrl" style="margin-top:12px"><div style="display:flex;align-items:center;gap:10px;color:var(--m);font-size:14px"><div class="spin" style="border-color:var(--gb);border-top-color:var(--g1);width:18px;height:18px"></div><span id="ocrst">${ocrWorker?'Reading digits…':(ocrProg||'Downloading OCR engine (first time only)…')}</span></div>
+      <div style="height:6px;background:var(--gl);border-radius:4px;margin:10px 0;overflow:hidden"><div id="ocrbar" style="height:100%;width:5%;background:var(--g1);transition:width .3s"></div></div>
+      <button class="btn b-gr" id="ocrSkip" style="width:100%">Type it myself</button></div><div id="ocrr"></div>`);
+    $('#ocrSkip').onclick=()=>result('','Read the number from the photo above and type it.');
+    try{
+      const w=await getWorker();if(done)return;
+      const st=$('#ocrst');if(st)st.textContent='Reading digits…';
+      let r=await withTimeout(w.recognize(proc),40000,'Reading took too long.');let v=pickNumber(r.data.text);
+      if(!v&&!done){r=await withTimeout(w.recognize(orig),40000,'Reading took too long.');v=pickNumber(r.data.text)}
+      result(v,v?'Check the value against the photo and correct if needed.':'Could not read the digits clearly. Retake closer and straight, or type the value.');
+    }catch(e){result('',esc(e.message||String(e))+' You can type the value from the photo.')}
   };
   inp.click();
 }
@@ -580,7 +636,7 @@ function showEstimate(sid,key,label,dt,cb){
 
 /* ================= DIESEL FILLING PAGE ================= */
 function DieselPage(sid){
-  const site=siteById(sid);if(!site)return SiteList('diesel');
+  const site=siteById(sid);if(!site)return SiteList('diesel');preloadOCR();const SC=siteCfg(sid);
   const F={dt:nowLocal(),src:{},kwh:'',dg:'',piu:'',opening:'',filled:''};
   const prevInfo=()=>{
     const day=dayOf(F.dt);
@@ -589,7 +645,7 @@ function DieselPage(sid){
     return {prev,kwhP};
   };
   let P=prevInfo();
-  F.opening=P.prev&&isNum(P.prev.data.closing)?Math.max(0,+P.prev.data.closing):S.openingDefault;
+  F.opening=P.prev&&isNum(P.prev.data.closing)?Math.max(0,+P.prev.data.closing):SC.opening;
   function hints(){
     P=prevInfo();
     $('#h-kwh').textContent=P.kwhP?`Previous: ${fmtN(P.kwhP.v)} on ${fmtD(P.kwhP.dt)}`:'No previous reading';
@@ -600,7 +656,7 @@ function DieselPage(sid){
   function calc(){
     const prevDg=P.prev&&isNum(P.prev.data.dg)?+P.prev.data.dg:null;
     const dgDiff=isNum(F.dg)&&prevDg!=null?r2(+F.dg-prevDg):0;
-    const cons=r2(Math.max(0,dgDiff)*S.rate);
+    const cons=r2(Math.max(0,dgDiff)*SC.rate);
     const closing=r2((+F.opening||0)+(+F.filled||0)-cons);
     return {prevDg,dgDiff,cons,closing};
   }
@@ -613,11 +669,13 @@ function DieselPage(sid){
     $('#calc').innerHTML=`<div class="l"><span>Opening balance</span><b>${fmtN(F.opening||0,1)} L</b></div>
     <div class="l"><span>Diesel filled</span><b>${fmtN(F.filled||0,1)} L</b></div>
     <div class="l"><span>DG hours difference</span><b>${fmtN(c.dgDiff)} Hrs</b></div>
-    <div class="l"><span>Diesel consumption (${S.rate} L/Hr)</span><b>${fmtN(c.cons,1)} L</b></div>
+    <div class="l"><span>Diesel consumption (${SC.rate} L/Hr)</span><b>${fmtN(c.cons,1)} L</b></div>
     <div class="l tot"><span>Closing Diesel Balance</span><b>${fmtN(c.closing,1)} L</b></div>`;
-    $('#negw').innerHTML=c.closing<0?`<div class="warn">${I.alert}<span>Closing balance is negative (${fmtN(c.closing,1)} L). Check DG hours, opening balance or diesel filled before saving.</span></div>`:'';
+    const over=SC.tank&&c.closing>SC.tank?`<div class="note">Closing balance (${fmtN(c.closing,1)} L) is more than this site's tank capacity (${SC.tank} L). Check diesel filled.</div>`:'';
+    $('#negw').innerHTML=over+(c.closing<0?`<div class="warn">${I.alert}<span>Closing balance is negative (${fmtN(c.closing,1)} L). Check DG hours, opening balance or diesel filled before saving.</span></div>`:'');
   }
   render(header('Diesel Filling - '+site.name,'#/diesel')+`<div class="wrap">
+    <div style="text-align:right;margin:-4px 0 6px"><a href="javascript:editSite('${sid}',true)" style="font-size:12.5px;color:var(--g1);font-weight:700">⚙ Site settings (${SC.rate} L/Hr${SC.tank?' · tank '+SC.tank+' L':''})</a></div>
     <div class="info" id="pinfo"></div>
     <div class="field"><div class="lbl">Date &amp; Time</div><input class="inp sm" type="datetime-local" id="f-dt" value="${F.dt}"></div>
     ${rField('kwh','EB kWh Reading','', '')}
@@ -625,12 +683,12 @@ function DieselPage(sid){
     ${rField('piu','PIU Running Hours (HMR)','','',{est:false})}
     <div class="g2"><div class="field"><div class="lbl">Opening Diesel (L)</div><input class="inp" id="f-opening" data-k="opening" type="number" inputmode="decimal" step="any" value="${F.opening}"></div>
     <div class="field"><div class="lbl">Diesel Filled (L)</div><input class="inp" id="f-filled" data-k="filled" type="number" inputmode="decimal" step="any" placeholder="0"></div></div>
-    <div class="hint" style="margin:-8px 0 10px">Opening balance = last closing balance (or ${S.openingDefault} L for the first record). Edit if a dip shows otherwise.</div>
+    <div class="hint" style="margin:-8px 0 10px">Opening balance = last closing balance (or ${SC.opening} L for the first record). Edit if a dip shows otherwise.</div>
     <div id="calc" class="calc"></div><div id="negw"></div>
     <div class="btns"><button class="btn b-g" id="save">${I.save}Save Record</button><button class="btn b-gr" id="clr">${I.clear}Clear</button></div>
   </div>`,'home');
   hints();upd();
-  $('#f-dt').onchange=e=>{F.dt=e.target.value||nowLocal();hints();if(!$('#f-opening').dataset.touched){const p=P.prev;F.opening=p&&isNum(p.data.closing)?Math.max(0,+p.data.closing):S.openingDefault;$('#f-opening').value=F.opening}upd()};
+  $('#f-dt').onchange=e=>{F.dt=e.target.value||nowLocal();hints();if(!$('#f-opening').dataset.touched){const p=P.prev;F.opening=p&&isNum(p.data.closing)?Math.max(0,+p.data.closing):SC.opening;$('#f-opening').value=F.opening}upd()};
   $$('[data-k]').forEach(el=>el.oninput=()=>{const k=el.dataset.k;F[k]=el.value;if(k==='opening')el.dataset.touched=1;if(['kwh','dg','piu'].includes(k))setSrc(F,k,'MANUAL');upd()});
   $$('[data-cam]').forEach(b=>b.onclick=()=>{const k=b.dataset.cam;openOCR({kwh:'EB kWh',dg:'DG HMR',piu:'PIU HMR'}[k],v=>{F[k]=v;$('#f-'+k).value=v;setSrc(F,k,'OCR');upd()})});
   $$('[data-est]').forEach(b=>b.onclick=()=>{const k=b.dataset.est;showEstimate(sid,k,'EB kWh',F.dt,v=>{F[k]=v;$('#f-'+k).value=v;setSrc(F,k,'EST');upd()})});
@@ -643,7 +701,7 @@ function DieselPage(sid){
     const day=dayOf(F.dt);const dup=sameDayRec(sid,'diesel',day);
     if(dup&&!confirm(`A diesel record for ${site.name} on ${fmtD(day)} already exists.\nOK = replace it with this one\nCancel = do not save`))return;
     const rec={id:dup?dup.id:uid(),type:'diesel',site:sid,siteName:site.name,dt:F.dt,user:S.user,phone:S.phone,email:ACCOUNT?ACCOUNT.email:'',createdAt:dup?dup.createdAt:Date.now(),deleted:false,
-      data:{kwh:isNum(F.kwh)?+F.kwh:'',dg:+F.dg,piu:isNum(F.piu)?+F.piu:'',opening:+F.opening||0,filled:+F.filled||0,dgDiff:c.dgDiff,consumption:c.cons,closing:c.closing,rate:S.rate,
+      data:{kwh:isNum(F.kwh)?+F.kwh:'',dg:+F.dg,piu:isNum(F.piu)?+F.piu:'',opening:+F.opening||0,filled:+F.filled||0,dgDiff:c.dgDiff,consumption:c.cons,closing:c.closing,rate:SC.rate,
         prev:P.prev?{dt:P.prev.dt,dg:P.prev.data.dg,piu:P.prev.data.piu,closing:P.prev.data.closing}:null,prevKwh:P.kwhP?{dt:P.kwhP.dt,v:P.kwhP.v}:null},
       src:{kwh:isNum(F.kwh)?F.src.kwh||'MANUAL':'',dg:F.src.dg||'MANUAL',piu:isNum(F.piu)?F.src.piu||'MANUAL':''}};
     await putRec(rec);
@@ -655,10 +713,10 @@ function DieselPage(sid){
 
 /* ================= ENERGY PAGE ================= */
 function EnergyPage(sid){
-  const site=siteById(sid);if(!site)return SiteList('energy');
+  const site=siteById(sid);if(!site)return SiteList('energy');preloadOCR();const SOPS=siteCfg(sid).ops;
   const F={dt:nowLocal(),kwh:'',kvah:'',src:{},ops:{}};
-  OPS.forEach(o=>{F.ops[o]={};CHS.forEach(c=>F.ops[o][c]={kw:'',amp:''})});
-  let tab=OPS[0];let P;
+  SOPS.forEach(o=>{F.ops[o]={};CHS.forEach(c=>F.ops[o][c]={kw:'',amp:''})});
+  let tab=SOPS[0];let P;
   const prevE=()=>lastRecBefore(sid,'energy',dayOf(F.dt));
   function hints(){
     P=prevE();const day=dayOf(F.dt);
@@ -670,7 +728,7 @@ function EnergyPage(sid){
   }
   function opTable(){
     const prevOps=P?.data.ops?.[tab]||{};
-    $('#tabs').innerHTML=OPS.map(o=>{const has=CHS.some(c=>isNum(F.ops[o][c].kw)||isNum(F.ops[o][c].amp));return `<button data-tab="${o}" class="${o===tab?'on':''}">${o}${has?'<span class="tk"></span>':''}</button>`}).join('');
+    $('#tabs').innerHTML=SOPS.map(o=>{const has=CHS.some(c=>isNum(F.ops[o][c].kw)||isNum(F.ops[o][c].amp));return `<button data-tab="${o}" class="${o===tab?'on':''}">${o}${has?'<span class="tk"></span>':''}</button>`}).join('');
     $('#optbl').innerHTML=`<tr><th>CH</th><th>kW</th><th>Amp</th><th></th></tr>`+CHS.map(c=>{
       const v=F.ops[tab][c],pv=prevOps[c]||{};
       const cls=f=>{const s=F.src[`${tab}.${c}.${f}`];return s==='EST'?'est':s==='OCR'?'ocr':''};
@@ -705,19 +763,19 @@ function EnergyPage(sid){
   $$('[data-est]').forEach(b=>b.onclick=()=>{const k=b.dataset.est;showEstimate(sid,k,k==='kwh'?'EB kWh':'EB kVAh',F.dt,v=>{F[k]=v;$('#f-'+k).value=v;setSrc(F,k,'EST');chk()})});
   $('#clr').onclick=()=>{if(confirm('Clear all entered values (all operators)?'))EnergyPage(sid)};
   $('#save').onclick=async()=>{
-    const anyOp=OPS.some(o=>CHS.some(c=>isNum(F.ops[o][c].kw)||isNum(F.ops[o][c].amp)));
+    const anyOp=SOPS.some(o=>CHS.some(c=>isNum(F.ops[o][c].kw)||isNum(F.ops[o][c].amp)));
     if(!isNum(F.kwh)&&!isNum(F.kvah)&&!anyOp)return toast('Nothing to save – enter at least one reading');
     if($$('.inp.bad').length&&!confirm('Some readings are lower than previous (meter reset/replaced?). Save anyway?'))return;
     const day=dayOf(F.dt);const dup=sameDayRec(sid,'energy',day);
     if(dup&&!confirm(`An energy record for ${site.name} on ${fmtD(day)} already exists.\nOK = replace it\nCancel = do not save`))return;
     const ops={};const src={};
-    OPS.forEach(o=>{ops[o]={};CHS.forEach(c=>{const v=F.ops[o][c];ops[o][c]={kw:isNum(v.kw)?+v.kw:'',amp:isNum(v.amp)?+v.amp:''};['kw','amp'].forEach(f=>{if(isNum(v[f]))src[`${o}.${c}.${f}`]=F.src[`${o}.${c}.${f}`]||'MANUAL'})})});
+    SOPS.forEach(o=>{ops[o]={};CHS.forEach(c=>{const v=F.ops[o][c];ops[o][c]={kw:isNum(v.kw)?+v.kw:'',amp:isNum(v.amp)?+v.amp:''};['kw','amp'].forEach(f=>{if(isNum(v[f]))src[`${o}.${c}.${f}`]=F.src[`${o}.${c}.${f}`]||'MANUAL'})})});
     if(isNum(F.kwh))src.kwh=F.src.kwh||'MANUAL';if(isNum(F.kvah))src.kvah=F.src.kvah||'MANUAL';
     const rec={id:dup?dup.id:uid(),type:'energy',site:sid,siteName:site.name,dt:F.dt,user:S.user,phone:S.phone,email:ACCOUNT?ACCOUNT.email:'',createdAt:dup?dup.createdAt:Date.now(),deleted:false,
       data:{kwh:isNum(F.kwh)?+F.kwh:'',kvah:isNum(F.kvah)?+F.kvah:'',ops,prevKwh:hints.k?{dt:hints.k.dt,v:hints.k.v}:null,prevKvah:hints.v?{dt:hints.v.dt,v:hints.v.v}:null},src};
     await putRec(rec);
     modal(`<div class="okbig"><div class="c">${I.ok}</div><b>Energy Reading Saved!</b></div>
-    <div class="dl"><span>Site</span><b>${esc(site.name)}</b><span>Date</span><b>${fmtDT(rec.dt)}</b><span>EB kWh</span><b>${fmtN(rec.data.kwh)} ${src.kwh==='EST'?'(Est.)':''}</b><span>EB kVAh</span><b>${fmtN(rec.data.kvah)} ${src.kvah==='EST'?'(Est.)':''}</b><span>Operators filled</span><b>${OPS.filter(o=>CHS.some(c=>isNum(ops[o][c].kw)||isNum(ops[o][c].amp))).join(', ')||'—'}</b></div>
+    <div class="dl"><span>Site</span><b>${esc(site.name)}</b><span>Date</span><b>${fmtDT(rec.dt)}</b><span>EB kWh</span><b>${fmtN(rec.data.kwh)} ${src.kwh==='EST'?'(Est.)':''}</b><span>EB kVAh</span><b>${fmtN(rec.data.kvah)} ${src.kvah==='EST'?'(Est.)':''}</b><span>Operators filled</span><b>${SOPS.filter(o=>CHS.some(c=>isNum(ops[o][c].kw)||isNum(ops[o][c].amp))).join(', ')||'—'}</b></div>
     <div class="btns"><button class="btn b-gr" onclick="location.hash='#/history'">View History</button><button class="btn b-g" onclick="location.hash='#/'">Back to Menu</button></div>`);
   };
 }
@@ -741,14 +799,18 @@ function buildSnapshot(sid){
     cur:Object.fromEntries(RF.map(([f])=>[f,cur[f]?{v:cur[f].v,src:cur[f].src}:{v:'',src:''}])),
     prev:Object.fromEntries(RF.map(([f])=>[f,prev[f]?{v:prev[f].v,src:prev[f].src}:{v:'',src:''}]))};
 }
-function reqCalc(R){
+function reqCalc(R,sid){
+  const SC=siteCfg(sid);
   const d=f=>isNum(R.cur[f].v)&&isNum(R.prev[f].v)?r2(R.cur[f].v-R.prev[f].v):'';
   const dg=d('dg');
   const fuelDiff=isNum(R.cur.fuel.v)&&isNum(R.prev.fuel.v)?r2(R.prev.fuel.v-R.cur.fuel.v):'';
-  const cons=isNum(dg)?r2(Math.max(0,dg)*S.rate):'';
+  const cons=isNum(dg)?r2(Math.max(0,dg)*SC.rate):'';
   const tankUse=isNum(fuelDiff)?r2(fuelDiff+(+R.filled||0)):'';
-  const req=isNum(cons)&&isNum(R.cur.fuel.v)?r2(Math.max(0,cons-R.cur.fuel.v)):'';
-  return {kwh:d('kwh'),kvah:d('kvah'),dg,piu:d('piu'),fuelDiff,cons,tankUse,req};
+  const tankFill=SC.tank&&isNum(R.cur.fuel.v)?r2(Math.max(0,SC.tank-R.cur.fuel.v)):'';
+  let req=isNum(cons)&&isNum(R.cur.fuel.v)?r2(Math.max(0,cons-R.cur.fuel.v)):'';
+  if(SC.method==='tank'&&isNum(tankFill))req=tankFill;
+  else if(isNum(req)&&isNum(tankFill))req=Math.min(req,tankFill);
+  return {kwh:d('kwh'),kvah:d('kvah'),dg,piu:d('piu'),fuelDiff,cons,tankUse,req,tankFill,rate:SC.rate,method:SC.method,tank:SC.tank};
 }
 function reqMessage(sid,R,C){
   const e=(o)=>o.src==='EST'?' (Est.)':'';
@@ -758,7 +820,7 @@ function reqMessage(sid,R,C){
     `Previous: ${fmtD(R.prevDay)}`,`EB kWh: ${v(R.prev.kwh)}`,`EB kVAh: ${v(R.prev.kvah)}`,`DG HMR: ${v(R.prev.dg)}`,`PIU HMR: ${v(R.prev.piu)}`,`Fuel level: ${fmtN(R.prev.fuel.v,1)} Litres`,'',
     'Consumption and Difference Summary',`EB kWh Consumption: ${fmtN(C.kwh)}`,`EB kVAh Consumption: ${fmtN(C.kvah)}`,`DG Running Hours: ${fmtN(C.dg)}`,`PIU Running Hours: ${fmtN(C.piu)}`,`Fuel Level Difference: ${fmtN(C.fuelDiff,1)} Litres`);
   if(+R.filled>0)L.push(`Diesel Filled in Period: ${fmtN(R.filled,1)} Litres`);
-  L.push(`DG Diesel Consumption (${S.rate} L/Hr): ${fmtN(C.cons,1)} Litres`,`Diesel Requirement: ${fmtN(C.req,1)} Litres`,'','Kindly arrange the required diesel filling.');
+  L.push(`DG Diesel Consumption (${C.rate} L/Hr): ${fmtN(C.cons,1)} Litres`,`Diesel Requirement: ${fmtN(C.req,1)} Litres`,'','Kindly arrange the required diesel filling.');
   return L.join('\n');
 }
 let MSG=null;
@@ -777,7 +839,7 @@ function RequestPage(sid){
     <button class="btn b-o" id="gen">${I.wa}Generate Message</button>
   </div>`,'home');
   function upd(){
-    const C=reqCalc(R);
+    const C=reqCalc(R,sid);
     const miss=[];RF.forEach(([f,l])=>{if(!isNum(R.cur[f].v))miss.push('Current '+l);if(!isNum(R.prev[f].v))miss.push('Previous '+l)});
     if(!R.prevDay)miss.push('Previous date');
     $('#missing').innerHTML=miss.length?`<div class="warn">${I.alert}<span>Missing information: ${miss.join(', ')}. Please enter it in the red boxes below.</span></div>`:'';
@@ -788,10 +850,11 @@ function RequestPage(sid){
     <div class="l"><span>PIU Running Hours</span><b>${fmtN(C.piu)}</b></div>
     <div class="l"><span>Fuel Level Difference</span><b>${fmtN(C.fuelDiff,1)} L</b></div>
     <div class="l"><span>Diesel Filled in Period</span><b>${fmtN(R.filled||0,1)} L</b></div>
-    <div class="l"><span>DG Consumption (${S.rate} L/Hr)</span><b>${fmtN(C.cons,1)} L</b></div>
+    <div class="l"><span>DG Consumption (${C.rate} L/Hr)</span><b>${fmtN(C.cons,1)} L</b></div>
     ${isNum(C.tankUse)&&isNum(C.cons)&&Math.abs(C.tankUse-C.cons)>5?`<div class="l" style="color:var(--y)"><span>Tank-based use (prev + filled − current)</span><b>${fmtN(C.tankUse,1)} L</b></div>`:''}
     <div class="l req"><span>Diesel Requirement (Est.)</span><b>${fmtN(C.req,1)} L</b></div>
-    <div class="hint">Requirement = DG consumption for the period − current fuel balance (expected need for the next similar period).</div>`;
+    ${C.tank?`<div class="l"><span>Tank capacity / space</span><b>${fmtN(C.tank)} L / ${fmtN(C.tankFill,1)} L</b></div>`:''}
+    <div class="hint">${C.method==='tank'?`This site: requirement = fill tank to full (${C.tank} L) − current fuel.`:`Requirement = DG consumption for the period (${C.rate} L/Hr) − current fuel balance${C.tank?', limited to tank space':''}.`} <a href="javascript:editSite('${sid}',true)">Change site settings</a></div>`;
     $('#gen').disabled=!!miss.length;
     return C;
   }
@@ -819,35 +882,35 @@ function MsgPage(){
   const persist=async()=>{MSG.text=ta.value;const r=RECS.find(x=>x.id===MSG.recId);if(r&&r.data.message!==MSG.text){r.data.message=MSG.text;await putRec(r)}};
   $('#ed').onclick=()=>{if(ta.readOnly){ta.readOnly=false;ta.focus();$('#ed').innerHTML=I.ok+'Done'}else{ta.readOnly=true;$('#ed').innerHTML=I.edit+'Edit';persist();toast('Message updated')}};
   $('#cp').onclick=async()=>{await persist();try{await navigator.clipboard.writeText(ta.value)}catch(e){ta.readOnly=false;ta.select();document.execCommand('copy');ta.readOnly=true}toast('Message copied')};
-  $('#wa').onclick=async()=>{await persist();const n=(S.waNumber||'').replace(/\D/g,'');window.open(`https://wa.me/${n}?text=${encodeURIComponent(ta.value)}`,'_blank')};
+  $('#wa').onclick=async()=>{await persist();const n=(siteCfg(MSG.sid).wa||'').replace(/\D/g,'');window.open(`https://wa.me/${n}?text=${encodeURIComponent(ta.value)}`,'_blank')};
 }
 
 /* ================= DASHBOARD ================= */
 function latestBySite(){
-  return S.sites.map(s=>{const g=f=>{const h=fieldHist(s.id,f);return h[h.length-1]};const ds=recsOf(s.id,'diesel');return {s,fuel:g('fuel'),dg:g('dg'),kwh:g('kwh'),kvah:g('kvah'),last:ds[ds.length-1]}});
+  return activeSites().map(s=>{const g=f=>{const h=fieldHist(s.id,f);return h[h.length-1]};const ds=recsOf(s.id,'diesel');return {s,fuel:g('fuel'),dg:g('dg'),kwh:g('kwh'),kvah:g('kvah'),last:ds[ds.length-1]}});
 }
 function Dashboard(tab='diesel'){
   const L=latestBySite();
   const totalFuel=r2(L.reduce((a,x)=>a+(x.fuel&&x.fuel.v>0?x.fuel.v:0),0));
-  const low=L.filter(x=>x.fuel&&x.fuel.v<S.lowFuel).length;
+  const low=L.filter(x=>x.fuel&&x.fuel.v<siteCfg(x.s.id).low).length;
   const totalDg=r2(L.reduce((a,x)=>a+(x.dg?x.dg.v:0),0));
   const totalKwh=L.reduce((a,x)=>a+(x.kwh?x.kwh.v:0),0);
   const recent=live().filter(r=>r.type===tab).sort((a,b)=>b.dt<a.dt?-1:1).slice(0,10);
   const rows={
-    diesel:['<th>Date</th><th>Site</th><th class="r">Filled</th><th class="r">Closing</th>',r=>`<td>${fmtD(r.dt)}</td><td>${esc(siteName(r.site))}</td><td class="r">${fmtN(r.data.filled,1)}</td><td class="r ${r.data.closing<S.lowFuel?'low':''}">${fmtN(r.data.closing,1)}</td>`],
+    diesel:['<th>Date</th><th>Site</th><th class="r">Filled</th><th class="r">Closing</th>',r=>`<td>${fmtD(r.dt)}</td><td>${esc(siteName(r.site))}</td><td class="r">${fmtN(r.data.filled,1)}</td><td class="r ${r.data.closing<siteCfg(r.site).low?'low':''}">${fmtN(r.data.closing,1)}</td>`],
     energy:['<th>Date</th><th>Site</th><th class="r">kWh</th><th class="r">kVAh</th>',r=>`<td>${fmtD(r.dt)}</td><td>${esc(siteName(r.site))}</td><td class="r">${fmtN(r.data.kwh)}</td><td class="r">${fmtN(r.data.kvah)}</td>`],
     request:['<th>Date</th><th>Site</th><th class="r">DG Hrs</th><th class="r">Req (L)</th>',r=>`<td>${fmtD(r.dt)}</td><td>${esc(siteName(r.site))}</td><td class="r">${fmtN(r.data.calc?.dg)}</td><td class="r">${fmtN(r.data.requirement,1)}</td>`]
   }[tab];
   render(header('Dashboard','')+`<div class="wrap">
     <div class="tiles">
-      <div class="tile" style="background:var(--bl)"><div class="ti" style="background:var(--b)">${I.site}</div><div><span>Total Sites</span><b>${S.sites.length}</b></div></div>
+      <div class="tile" style="background:var(--bl)"><div class="ti" style="background:var(--b)">${I.site}</div><div><span>Total Sites</span><b>${activeSites().length}</b></div></div>
       <div class="tile" style="background:var(--ol)"><div class="ti" style="background:var(--o)">${I.fuel}</div><div><span>Diesel Balance Total</span><b>${fmtN(totalFuel,1)} L</b></div></div>
       <div class="tile" style="background:var(--gl)"><div class="ti" style="background:var(--g1)">${I.clock}</div><div><span>Latest DG Hours (sum)</span><b>${fmtN(totalDg,1)}</b></div></div>
-      <div class="tile" style="background:${low?'var(--rl)':'var(--gl)'}"><div class="ti" style="background:${low?'var(--r)':'var(--g1)'}">${I.alert}</div><div><span>Low fuel (&lt;${S.lowFuel} L)</span><b>${low} site${low==1?'':'s'}</b></div></div>
+      <div class="tile" style="background:${low?'var(--rl)':'var(--gl)'}"><div class="ti" style="background:${low?'var(--r)':'var(--g1)'}">${I.alert}</div><div><span>Low fuel sites</span><b>${low} site${low==1?'':'s'}</b></div></div>
     </div>
     <div class="sec-t">Latest Readings by Site</div>
     <div class="scroll"><table class="tbl"><tr><th>Site</th><th class="r">Fuel L</th><th class="r">DG HMR</th><th class="r">EB kWh</th><th class="r">kVAh</th><th>Last</th></tr>
-      ${L.map(x=>`<tr><td><a href="#/request/${x.s.id}" style="color:inherit">${esc(x.s.name)}</a></td><td class="r ${x.fuel&&x.fuel.v<S.lowFuel?'low':''}">${x.fuel?fmtN(x.fuel.v,1):'—'}</td><td class="r">${x.dg?fmtN(x.dg.v):'—'}</td><td class="r">${x.kwh?fmtN(x.kwh.v):'—'}</td><td class="r">${x.kvah?fmtN(x.kvah.v):'—'}</td><td>${x.last?fmtD(x.last.dt).slice(0,5):'—'}</td></tr>`).join('')}
+      ${L.map(x=>`<tr><td><a href="#/request/${x.s.id}" style="color:inherit">${esc(x.s.name)}</a></td><td class="r ${x.fuel&&x.fuel.v<siteCfg(x.s.id).low?'low':''}">${x.fuel?fmtN(x.fuel.v,1):'—'}</td><td class="r">${x.dg?fmtN(x.dg.v):'—'}</td><td class="r">${x.kwh?fmtN(x.kwh.v):'—'}</td><td class="r">${x.kvah?fmtN(x.kvah.v):'—'}</td><td>${x.last?fmtD(x.last.dt).slice(0,5):'—'}</td></tr>`).join('')}
     </table></div>
     <div class="sec-t">Latest Records</div>
     <div class="tabs">${[['diesel','Diesel Filling'],['energy','Energy'],['request','Requests']].map(([k,l])=>`<button class="${k===tab?'on':''}" onclick="Dashboard('${k}')">${l}</button>`).join('')}</div>
@@ -889,7 +952,7 @@ function recDetail(id){
   modal(`<h3>${esc(siteName(r.site))} · ${r.type}</h3><div class="dl"><span>Date</span><b>${fmtDT(r.dt)}</b><span>Entered by</span><b>${esc(r.user||'—')}</b>${body}</div>
   <div class="btns">${r.type==='request'?`<button class="btn b-wa" id="rwa">${I.wa}Resend</button>`:''}<button class="btn b-r" id="del">Delete</button><button class="btn b-gr" onclick="closeModal()">Close</button></div>`);
   $('#del').onclick=async()=>{if(!confirm('Delete this record? It will be removed from all devices.'))return;r.deleted=true;await putRec(r);closeModal();toast('Record deleted');History()};
-  if($('#rwa'))$('#rwa').onclick=()=>window.open(`https://wa.me/${(S.waNumber||'').replace(/\D/g,'')}?text=${encodeURIComponent(r.data.message)}`,'_blank');
+  if($('#rwa'))$('#rwa').onclick=()=>window.open(`https://wa.me/${(siteCfg(r.site).wa||'').replace(/\D/g,'')}?text=${encodeURIComponent(r.data.message)}`,'_blank');
 }
 
 /* ================= EXCEL EXPORT ================= */
@@ -910,9 +973,43 @@ async function exportExcel(list){
     by('energy').flatMap(r=>CHS.map(c=>{const v=r.data.ops?.[o]?.[c];if(!v||(!isNum(v.kw)&&!isNum(v.amp)))return null;return [r.id,...dt(r),siteName(r.site),'CH'+c,n(v.kw),r.src?.[`${o}.${c}.kw`]||'',n(v.amp),r.src?.[`${o}.${c}.amp`]||'',r.user||'']}).filter(Boolean))));
   add('Diesel Request History',['Record ID','Date','Time','Site','Current Date','Previous Date','kWh Cons','kVAh Cons','DG Hrs','PIU Hrs','Fuel Diff (L)','Filled (L)','DG Consumption (L)','Requirement (L)','Message','User'],
     by('request').map(r=>{const d=r.data,c=d.calc||{};return [r.id,...dt(r),siteName(r.site),fmtD(d.curDay),fmtD(d.prevDay),n(c.kwh),n(c.kvah),n(c.dg),n(c.piu),n(c.fuelDiff),n(d.filled),n(c.cons),n(c.req),d.message,r.user||'']}));
-  add('Site Master',['No','Site ID','Site Name','Operators','Channels per Operator','Opening Default (L)','Rate (L/Hr)'],S.sites.map((s,i)=>[i+1,s.id,s.name,OPS.join(', '),4,S.openingDefault,S.rate]));
+  add('Site Master',['No','Site ID','Site Name','Active','Operators','Channels per Operator','DG Rate (L/Hr)','Opening Default (L)','Tank Capacity (L)','Low Fuel Alert (L)','Requirement Method','WhatsApp'],S.sites.map((s,i)=>{const c=siteCfg(s.id);return [i+1,s.id,s.name,s.hidden?'No':'Yes',c.ops.join(', '),4,c.rate,c.opening,c.tank||'',c.low,c.method==='tank'?'Fill tank to full':'DG consumption',c.wa]}));
   add('Previous Readings',['Site','Fuel (L)','Fuel Date','DG HMR','DG Date','EB kWh','kWh Date','EB kVAh','kVAh Date'],latestBySite().map(x=>[x.s.name,x.fuel?.v??'',x.fuel?fmtD(x.fuel.dt):'',x.dg?.v??'',x.dg?fmtD(x.dg.dt):'',x.kwh?.v??'',x.kwh?fmtD(x.kwh.dt):'',x.kvah?.v??'',x.kvah?fmtD(x.kvah.dt):'']));
   XLSX.writeFile(wb,`FieldRecord_${dayOf(nowLocal())}.xlsx`);
+}
+
+/* ================= SITE EDITOR ================= */
+function editSite(sid,back){
+  const st=siteById(sid);if(!st)return;const c=siteCfg(sid);
+  const v=k=>st[k]!==undefined&&st[k]!==null?st[k]:'';
+  modal(`<h3>Site Settings · ${esc(st.name)}</h3>
+  <div class="setf"><label>Site name</label><input class="sel" id="e-name" value="${esc(st.name)}"></div>
+  <div class="g2">
+    <div class="setf"><label>DG rate (L/Hr)</label><input class="sel" id="e-rate" type="number" step="0.1" inputmode="decimal" value="${v('rate')}" placeholder="${S.rate} (default)"></div>
+    <div class="setf"><label>Opening balance (L)</label><input class="sel" id="e-opening" type="number" inputmode="decimal" value="${v('opening')}" placeholder="${S.openingDefault} (default)"></div>
+    <div class="setf"><label>Tank capacity (L)</label><input class="sel" id="e-tank" type="number" inputmode="decimal" value="${v('tank')}" placeholder="optional"></div>
+    <div class="setf"><label>Low fuel alert (L)</label><input class="sel" id="e-low" type="number" inputmode="decimal" value="${v('low')}" placeholder="${S.lowFuel} (default)"></div>
+  </div>
+  <div class="setf"><label>Diesel requirement method</label><select class="sel" id="e-method">
+    <option value="consumption" ${c.method==='consumption'?'selected':''}>DG consumption − current fuel (default)</option>
+    <option value="tank" ${c.method==='tank'?'selected':''}>Fill tank to full (needs tank capacity)</option></select></div>
+  <div class="setf"><label>Operators at this site</label><div class="opts" id="e-ops">${OPS.map(o=>`<button type="button" data-op="${o}" class="${c.ops.includes(o)?'on':''}">${o}</button>`).join('')}</div></div>
+  <div class="setf"><label>WhatsApp number for this site's requests (optional)</label><input class="sel" id="e-wa" inputmode="tel" value="${esc(st.wa||'')}" placeholder="${esc(S.waNumber||'e.g. 919876543210')}"></div>
+  <label style="display:flex;align-items:center;gap:8px;font-size:14px;margin:6px 0 4px"><input type="checkbox" id="e-hidden" ${st.hidden?'checked':''} style="width:20px;height:20px"> Hide this site from lists (records are kept)</label>
+  <div class="hint">Leave a box empty to use the default value from Settings.</div>
+  <div class="btns"><button class="btn b-gr" onclick="closeModal()">Cancel</button><button class="btn b-g" id="e-save">${I.save}Save</button></div>`);
+  $$('#e-ops [data-op]').forEach(b=>b.onclick=()=>b.classList.toggle('on'));
+  $('#e-save').onclick=async()=>{
+    const num=id=>{const x=$(id).value.trim();return x===''?undefined:+x};
+    const ops=$$('#e-ops .on').map(b=>b.dataset.op);
+    if(!ops.length)return toast('Select at least one operator');
+    const name=$('#e-name').value.trim();if(!name)return toast('Enter a site name');
+    const method=$('#e-method').value,tank=num('#e-tank');
+    if(method==='tank'&&!tank)return toast('Enter tank capacity for "Fill tank to full"');
+    Object.assign(st,{name,rate:num('#e-rate'),opening:num('#e-opening'),tank,low:num('#e-low'),method:method==='consumption'?undefined:method,ops:ops.length===OPS.length?undefined:ops,wa:$('#e-wa').value.trim()||undefined,hidden:$('#e-hidden').checked||undefined});
+    Object.keys(st).forEach(k=>st[k]===undefined&&delete st[k]);
+    await saveSiteConfig();closeModal();toast('Site settings saved');back?route():Settings();
+  };
 }
 
 /* ================= SETTINGS ================= */
@@ -923,14 +1020,17 @@ function Settings(){
       <div class="setf"><label>Your name (saved with every record)</label><input class="sel" id="s-user" value="${esc(S.user)}"></div>
       <div class="setf"><label>Phone</label><input class="sel" id="s-phone" inputmode="tel" value="${esc(S.phone)}"></div>
       <div class="setf"><label>Default WhatsApp number for requests (optional, with country code e.g. 919876543210)</label><input class="sel" id="s-wa" inputmode="tel" value="${esc(S.waNumber)}"></div></div>
-    <div class="card"><h3>Calculation</h3>
+    <div class="card"><h3>Default values (all sites)</h3>
+      <div class="hint" style="margin:0 0 8px">Used for any site that doesn't have its own value in Site Settings.</div>
       <div class="g2"><div class="setf"><label>Opening balance (L)</label><input class="sel" id="s-open" type="number" value="${S.openingDefault}"></div>
       <div class="setf"><label>DG rate (L/Hr)</label><input class="sel" id="s-rate" type="number" step="0.1" value="${S.rate}"></div>
       <div class="setf"><label>Low fuel alert (L)</label><input class="sel" id="s-low" type="number" value="${S.lowFuel}"></div></div></div>
-    <div class="card"><h3>Sites (${S.sites.length})</h3>
-      <div class="hint" style="margin:0 0 8px">One site per line. Rename freely — history stays attached to the same line. Add new sites at the end.</div>
-      <textarea class="sel" id="s-sites" rows="10" style="font-size:14px">${esc(S.sites.map(s=>s.name).join('\n'))}</textarea></div>
-    <button class="btn b-g" id="s-save">${I.save}Save Settings</button>
+    <button class="btn b-g" id="s-save" style="width:100%">${I.save}Save Settings</button>
+    <div class="card mt"><h3>Site Settings (${activeSites().length} sites)</h3>
+      <div class="hint" style="margin:0 0 8px">Tap a site to set its own DG rate, opening balance, tank capacity, low-fuel alert, requirement method, operators and WhatsApp number. Changes sync to all phones.</div>
+      <ul class="slist" style="margin:0 -14px">${S.sites.map((st,i)=>{const c=siteCfg(st.id),own=['rate','opening','tank','low','method','ops','wa'].some(k=>st[k]!==undefined&&st[k]!==null&&st[k]!=='');
+        return `<li><a href="javascript:editSite('${st.id}')"><span class="num" style="${st.hidden?'background:#aab4ae':''}">${i+1}</span><span class="nm"><b>${esc(st.name)}${st.hidden?' (hidden)':''}</b><small>${c.rate} L/Hr · Open ${c.opening} L${c.tank?' · Tank '+c.tank+' L':''} · ${c.ops.length} operators${own?' · custom':''}</small></span><span class="ar">${I.chev}</span></a></li>`}).join('')}</ul>
+      <button class="btn b-gr mt" style="width:100%" id="s-add">+ Add new site</button></div>
     <div class="card mt"><h3>Cloud Sync (Firebase)</h3>
       <div class="hint" style="margin:0 0 8px">Paste the <b>firebaseConfig</b> object from Firebase console → Project settings → Your apps → Web app. All phones using the same config share records.</div>
       <textarea class="sel" id="s-fb" rows="7" style="font-size:12px;font-family:monospace" placeholder='{ "apiKey": "...", "authDomain": "...", "projectId": "...", "appId": "..." }'>${S.firebase?esc(JSON.stringify(S.firebase,null,1)):''}</textarea>
@@ -951,11 +1051,9 @@ function Settings(){
   $('#s-save').onclick=()=>{
     S.user=$('#s-user').value.trim();S.phone=$('#s-phone').value.trim();S.waNumber=$('#s-wa').value.trim();
     S.openingDefault=+$('#s-open').value||60;S.rate=+$('#s-rate').value||3.5;S.lowFuel=+$('#s-low').value||30;
-    const names=$('#s-sites').value.split('\n').map(x=>x.trim()).filter(Boolean);
-    if(names.length<S.sites.length&&!confirm(`You removed ${S.sites.length-names.length} site line(s) from the end. Their records are kept but hidden from lists. Continue?`))return;
-    S.sites=names.map((nm,i)=>({id:S.sites[i]?.id||('s'+Date.now().toString(36)+i),name:nm}));
-    saveS();toast('Settings saved');
+    saveS();toast('Settings saved');Settings();
   };
+  $('#s-add').onclick=async()=>{const nm=(prompt('New site name')||'').trim();if(!nm)return;const id='s'+Date.now().toString(36);S.sites.push({id,name:nm});await saveSiteConfig();toast('Site added');Settings();editSite(id)};
   $('#s-fbsave').onclick=async()=>{
     let t=$('#s-fb').value.trim();if(!t)return toast('Paste the config first');
     try{const m=t.match(/firebaseConfig\s*=\s*(\{[\s\S]*?\})/);if(m)t=m[1];t=t.replace(/^[^{]*/,'').replace(/[^}]*$/,'');const cfg=Function('"use strict";return ('+t+')')();if(!cfg.apiKey||!cfg.projectId)throw 0;S.firebase=cfg;saveS();localStorage.removeItem('fr_fb_off');$('#s-fbst').textContent='Connecting…';await Sync.init();Settings()}
@@ -986,7 +1084,7 @@ function sampleOps(k){const base={Airtel:[12.5,22],Vodafone:[10,18],BSNL:[11.2,2
 
 /* ================= BOOT ================= */
 (async function(){
-  try{await DB.open();RECS=await DB.all()}catch(e){alert('Storage unavailable: '+e.message)}
+  try{await DB.open();RECS=await DB.all();applySiteConfig(RECS.find(r=>r.id==='config-sites'))}catch(e){alert('Storage unavailable: '+e.message)}
   route();
   Sync.init();
   if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
