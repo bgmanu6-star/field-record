@@ -1,0 +1,916 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b5d34">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Field Record</title>
+<style>
+:root{--g:#0b5d34;--g1:#14804a;--gl:#e8f6ee;--gb:#cbe8d6;--o:#ee7a16;--ol:#fff2e5;--b:#1f6fd1;--bl:#e9f2fd;--r:#d4291f;--rl:#fdecea;--y:#a86200;--yl:#fff6dc;--t:#18221d;--m:#68756e;--line:#e2e8e4;--bg:#eef3f0}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans",sans-serif;background:var(--bg);color:var(--t);font-size:15px}
+#app{max-width:560px;margin:0 auto;min-height:100vh;background:#fff;padding-bottom:calc(78px + env(safe-area-inset-bottom));position:relative}
+button{font:inherit;cursor:pointer}
+input,select,textarea{font:inherit;color:inherit}
+.hd{position:sticky;top:0;z-index:20;background:var(--g);color:#fff;display:flex;align-items:center;gap:6px;padding:10px 10px;padding-top:calc(10px + env(safe-area-inset-top));min-height:58px}
+.hd h1{font-size:18px;margin:0;flex:1;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ib{background:none;border:0;color:inherit;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;flex:none}
+.ib:active{background:rgba(255,255,255,.15)}
+.ib svg{width:24px;height:24px}
+.chip{font-size:11px;font-weight:600;padding:5px 9px;border-radius:12px;background:rgba(255,255,255,.16);display:flex;align-items:center;gap:5px;white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:#9be3b5}
+.dot.off{background:#ffb4a8}.dot.wait{background:#ffd479}
+.spin{width:12px;height:12px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.wrap{padding:14px}
+.hero{background:var(--g);color:#fff;text-align:center;padding:26px 16px 34px;padding-top:calc(26px + env(safe-area-inset-top));position:relative}
+.hero h1{margin:10px 0 2px;font-size:30px;letter-spacing:1px;font-weight:800}
+.hero p{margin:0;opacity:.8;font-size:13px}
+.hero .top{position:absolute;top:calc(10px + env(safe-area-inset-top));right:10px}
+.menu{padding:0 14px;margin-top:-18px;display:grid;gap:12px;position:relative}
+.mcard{display:flex;align-items:center;gap:14px;border:0;border-radius:16px;padding:16px;text-align:left;width:100%;box-shadow:0 2px 10px rgba(0,0,0,.07)}
+.mcard .ic{width:58px;height:58px;border-radius:14px;display:grid;place-items:center;color:#fff;flex:none}
+.mcard .ic svg{width:32px;height:32px}
+.mcard b{display:block;font-size:18px;margin-bottom:3px}
+.mcard span{font-size:13px;color:var(--m)}
+.mcard .ar{margin-left:auto;width:22px;height:22px;flex:none}
+.m-g{background:var(--gl)}.m-g .ic{background:var(--g1)}.m-g b,.m-g .ar{color:var(--g)}
+.m-b{background:var(--bl)}.m-b .ic{background:var(--b)}.m-b b,.m-b .ar{color:var(--b)}
+.m-o{background:var(--ol)}.m-o .ic{background:var(--o)}.m-o b,.m-o .ar{color:#b65400}
+.qs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:14px}
+.qs div{background:var(--bg);border-radius:12px;padding:10px;text-align:center}
+.qs b{display:block;font-size:20px;color:var(--g)}.qs span{font-size:11px;color:var(--m)}
+.nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:560px;background:#fff;border-top:1px solid var(--line);display:flex;z-index:30;padding-bottom:env(safe-area-inset-bottom)}
+.nav a{flex:1;text-align:center;padding:8px 0 7px;color:var(--m);text-decoration:none;font-size:11px;font-weight:600}
+.nav a svg{width:23px;height:23px;display:block;margin:0 auto 2px}
+.nav a.on{color:var(--g)}
+.sec-t{font-size:15px;font-weight:700;margin:4px 0 10px}
+.slist{list-style:none;margin:0;padding:0}
+.slist li a{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line);color:inherit;text-decoration:none}
+.slist li a:active{background:var(--gl)}
+.num{width:28px;height:28px;border-radius:8px;background:var(--g1);color:#fff;display:grid;place-items:center;font-weight:700;font-size:13px;flex:none}
+.acc-b .num{background:var(--b)}.acc-o .num{background:var(--o)}
+.slist .nm{flex:1}.slist .nm b{display:block;font-weight:600}.slist .nm small{color:var(--m);font-size:12px}
+.slist .ar{width:18px;height:18px;color:#9aa6a0}
+.info{background:var(--gl);border-radius:12px;padding:10px 12px;display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:12.5px;margin-bottom:14px}
+.info.b{background:var(--bl)}
+.info span{color:var(--m)}.info b{font-weight:700}
+.field{margin-bottom:14px}
+.lbl{display:flex;align-items:center;gap:6px;font-weight:700;font-size:14px;margin-bottom:6px}
+.badge{font-size:10px;font-weight:800;padding:2px 7px;border-radius:8px;letter-spacing:.3px}
+.bd-OCR{background:var(--bl);color:var(--b)}.bd-EST{background:var(--ol);color:#b65400}.bd-MANUAL{display:none}
+.row{display:flex;gap:8px;align-items:stretch}
+.inp{width:100%;min-width:0;border:1.5px solid #cfd8d3;border-radius:10px;padding:12px;font-size:20px;font-weight:600;background:#fff}
+.inp:focus{outline:none;border-color:var(--g1);box-shadow:0 0 0 3px var(--gb)}
+.inp.est{background:var(--ol);border-color:#f3b77d;font-style:italic}
+.inp.ocr{background:var(--bl);border-color:#9cc2f0}
+.inp.bad{border-color:var(--r);background:var(--rl)}
+.inp.sm{font-size:16px;padding:10px}
+.tbtn{flex:none;width:66px;border-radius:10px;border:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px;font-weight:700}
+.tbtn svg{width:22px;height:22px}
+.t-cam{background:var(--bl);color:var(--b)}.t-est{background:var(--gl);color:var(--g1)}
+.hint{font-size:12px;color:var(--m);margin-top:4px}
+.err{font-size:12px;color:var(--r);margin-top:4px;font-weight:600}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.calc{background:var(--gl);border:1px solid var(--gb);border-radius:12px;padding:12px;margin:6px 0 14px}
+.calc .l{display:flex;justify-content:space-between;padding:4px 0;font-size:14px}
+.calc .l b{font-weight:700}
+.calc .tot{border-top:1px dashed #9fcdb1;margin-top:6px;padding-top:8px;font-size:16px}
+.calc .tot b{font-size:20px;color:var(--g)}
+.calc.neg{background:var(--rl);border-color:#f3b4ae}.calc.neg .tot b{color:var(--r)}
+.warn{background:var(--rl);color:var(--r);border-radius:10px;padding:10px 12px;font-size:13px;font-weight:600;margin-bottom:12px;display:flex;gap:8px}
+.note{background:var(--yl);color:var(--y);border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:12px}
+.btns{display:flex;gap:10px;margin-top:8px}
+.btn{flex:1;border:0;border-radius:12px;padding:14px;font-weight:700;font-size:16px;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn svg{width:20px;height:20px}
+.b-g{background:var(--g1);color:#fff}.b-gr{background:#eef1ef;color:var(--t)}.b-o{background:var(--o);color:#fff}.b-wa{background:#1fa855;color:#fff}.b-b{background:var(--b);color:#fff}.b-r{background:var(--rl);color:var(--r)}
+.btn:active{filter:brightness(.92)}
+.btn[disabled]{opacity:.5}
+.tabs{display:flex;gap:6px;margin-bottom:10px;overflow-x:auto}
+.tabs button{flex:1;border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:10px 6px;font-weight:700;font-size:13.5px;color:var(--m);white-space:nowrap}
+.tabs button.on{background:var(--g1);border-color:var(--g1);color:#fff}
+.tabs button .tk{display:inline-block;width:7px;height:7px;border-radius:50%;background:#2fb36b;margin-left:4px;vertical-align:middle}
+.tabs button.on .tk{background:#fff}
+.optbl{width:100%;border-collapse:collapse;font-size:13px}
+.optbl th{background:var(--gl);padding:8px 4px;font-size:12px;text-align:left}
+.optbl td{padding:5px 3px;border-bottom:1px solid var(--line);vertical-align:middle}
+.optbl td:first-child{font-weight:700;width:38px;padding-left:6px}
+.optbl .inp{font-size:16px;padding:9px 8px}
+.optbl .mini{display:flex;gap:4px}
+.mb{width:36px;height:40px;border:0;border-radius:8px;display:grid;place-items:center}
+.mb svg{width:18px;height:18px}
+.cmp{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.cbox{border-radius:12px;padding:10px;font-size:13px}
+.cbox h4{margin:0 0 2px;font-size:12px}
+.cbox .d{font-weight:800;font-size:15px;margin-bottom:6px}
+.cbox.c{background:var(--gl);border:1px solid var(--gb)}.cbox.c h4{color:var(--g1)}
+.cbox.p{background:var(--bl);border:1px solid #c6dbf6}.cbox.p h4{color:var(--b)}
+.kv{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:3px 0}
+.kv span{color:var(--m);font-size:12px;white-space:nowrap}
+.kv input{width:84px;text-align:right;border:1px solid transparent;border-radius:6px;padding:4px 5px;font-weight:700;background:rgba(255,255,255,.7);font-size:14px}
+.kv input:focus{outline:none;border-color:var(--g1);background:#fff}
+.kv input.miss{border-color:var(--r);background:var(--rl)}
+.kv input.est{color:#b65400;font-style:italic}
+.sum{background:#fff4f0;border:1px solid #f6cfc2;border-radius:12px;padding:12px;margin-bottom:12px}
+.sum h4{margin:0 0 6px;font-size:14px}
+.sum .l{display:flex;justify-content:space-between;padding:3px 0;font-size:13.5px}
+.sum .l b{font-weight:700}
+.sum .req{border-top:1px dashed #eab7a6;margin-top:6px;padding-top:8px;font-size:15px;font-weight:800}
+.sum .req b{color:var(--r);font-size:20px}
+textarea.msg{width:100%;min-height:440px;border:1.5px solid var(--line);border-radius:12px;padding:12px;font-size:14.5px;line-height:1.5;font-family:inherit;resize:vertical;background:#fafcfb}
+textarea.msg[readonly]{background:#f6f9f7}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.tile{border-radius:14px;padding:12px;display:flex;gap:10px;align-items:center}
+.tile .ti{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;color:#fff;flex:none}
+.tile .ti svg{width:22px;height:22px}
+.tile span{font-size:11.5px;color:var(--m);display:block}.tile b{font-size:19px}
+.tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.tbl th{text-align:left;background:var(--gl);padding:7px 6px;font-size:11.5px;white-space:nowrap}
+.tbl td{padding:7px 6px;border-bottom:1px solid var(--line)}
+.tbl td.r,.tbl th.r{text-align:right}
+.low{color:var(--r);font-weight:700}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:12px;margin-bottom:14px}
+.filters{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.sel{width:100%;border:1.5px solid #cfd8d3;border-radius:10px;padding:10px;background:#fff;font-size:14px}
+.rec{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px;display:flex;gap:10px;align-items:center;background:#fff;width:100%;text-align:left}
+.rec .tg{font-size:10px;font-weight:800;padding:3px 7px;border-radius:7px;flex:none}
+.tg-diesel{background:var(--gl);color:var(--g1)}.tg-energy{background:var(--bl);color:var(--b)}.tg-request{background:var(--ol);color:#b65400}
+.rec .mid{flex:1;min-width:0}.rec .mid b{display:block;font-size:14px}.rec .mid small{color:var(--m);font-size:12px}
+.rec .rt{text-align:right;font-size:13px;font-weight:700}
+.empty{text-align:center;color:var(--m);padding:30px 10px;font-size:14px}
+.card{border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+.card h3{margin:0 0 10px;font-size:15px}
+.setf{margin-bottom:10px}.setf label{display:block;font-size:12.5px;font-weight:700;color:var(--m);margin-bottom:4px}
+.setf .sel{font-size:15px}
+#modal .bg{position:fixed;inset:0;background:rgba(10,20,15,.55);z-index:50;display:flex;align-items:flex-end;justify-content:center}
+#modal .sheet{background:#fff;width:100%;max-width:560px;border-radius:20px 20px 0 0;max-height:92vh;overflow:auto;padding:16px;padding-bottom:calc(16px + env(safe-area-inset-bottom));animation:up .2s ease}
+@keyframes up{from{transform:translateY(40px);opacity:.5}}
+.sheet h3{margin:0 0 12px;font-size:17px}
+.ocrimg{width:100%;max-height:260px;object-fit:contain;background:#111;border-radius:12px;display:block}
+.bigv{background:var(--gl);border-radius:14px;padding:16px;text-align:center;margin:12px 0}
+.bigv b{font-size:34px;color:var(--g)}
+.bigv.o{background:var(--ol)}.bigv.o b{color:#b65400}
+.opts{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.opts button{border:1.5px solid var(--line);background:#fff;border-radius:18px;padding:6px 12px;font-weight:700}
+.opts button.on{background:var(--b);border-color:var(--b);color:#fff}
+#toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);z-index:60;pointer-events:none}
+#toast div{background:#1d2b24;color:#fff;padding:10px 16px;border-radius:22px;font-size:14px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.25);animation:up .2s ease;max-width:90vw;text-align:center}
+.okbig{text-align:center;padding:10px 0}
+.okbig .c{width:70px;height:70px;border-radius:50%;background:var(--g1);color:#fff;display:grid;place-items:center;margin:0 auto 8px}
+.okbig .c svg{width:40px;height:40px}
+.okbig b{color:var(--g1);font-size:19px}
+.dl{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13.5px;margin:10px 0}
+.dl span{color:var(--m)}.dl b{text-align:right}
+.loader{display:flex;align-items:center;gap:10px;justify-content:center;padding:20px;color:var(--m)}
+.loader .spin{border-color:var(--gb);border-top-color:var(--g1);width:22px;height:22px}
+.mt{margin-top:12px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="modal"></div>
+<div id="toast"></div>
+<input type="file" id="camIn" accept="image/*" capture="environment" hidden>
+<script>
+'use strict';
+/* ================= CONFIG ================= */
+const DEFAULT_SITES=["Palliyadi","Kanchirankode","Azhagiyapandipuram","Kattuvilai","Marthandam relocation","North street","Kuzhiturai 2","Uttirancode","Pulierangi","Veerapuli Kulasekharam","Pechiparai","Thirparappu 5","Kulasekharam","Kalkulam","Jtel internet"];
+const OPS=["Airtel","Vodafone","BSNL","Jio"];
+const CHS=[1,2,3,4];
+const CDN={
+  xlsx:"https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js",
+  tess:"https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js",
+  fbApp:"https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js",
+  fbAuth:"https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js",
+  fbStore:"https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"
+};
+
+/* ================= ICONS ================= */
+const I={
+back:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>',
+chev:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>',
+fuel:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 22V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v17M2 22h14M6 7h6v4H6zM15 10h2a2 2 0 0 1 2 2v5a1.5 1.5 0 0 0 3 0V8l-3-3"/></svg>',
+meter:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><rect x="7" y="5" width="10" height="5" rx="1"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"/></svg>',
+wa:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.5 14.4c-.3-.1-1.7-.8-2-.9-.3-.1-.5-.1-.7.1-.2.3-.8.9-.9 1.1-.2.2-.3.2-.6.1-.3-.1-1.2-.5-2.3-1.4-.9-.8-1.4-1.7-1.6-2-.2-.3 0-.5.1-.6l.4-.5c.1-.2.2-.3.3-.5.1-.2 0-.4 0-.5l-.9-2.2c-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.5s1.1 2.9 1.2 3.1c.1.2 2.1 3.2 5.1 4.5.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.7-.7 1.9-1.4.2-.7.2-1.2.2-1.4-.1-.1-.3-.2-.6-.3zM12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.3c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.3 8.3 0 1 1 12 20.3z"/></svg>',
+cam:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 3 7.2 5H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3H9zm3 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-2a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/></svg>',
+est:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18M5 16l4-5 4 3 6-8"/><path d="M15 6h4v4"/></svg>',
+save:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>',
+clear:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>',
+home:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3 2 12h3v8h5v-6h4v6h5v-8h3z"/></svg>',
+dash:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>',
+hist:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>',
+set:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7 7 0 0 0-1.7-1L15 3h-4l-.4 2.9a7 7 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7 7 0 0 0 1.7 1L11 21h4l.4-2.9a7 7 0 0 0 1.7-1l2.5 1 2-3.5-2.2-1.6zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg>',
+sync:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-15 6.7L3 16M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5M3 21v-5h5"/></svg>',
+ok:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+copy:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+edit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
+xls:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13l4 5M12 13l-4 5"/></svg>',
+site:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>',
+bolt:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h8l-1 8 10-12h-8z"/></svg>',
+clock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+alert:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/></svg>',
+logo:'<svg viewBox="0 0 64 64" width="64" height="64" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="10" width="36" height="46" rx="5"/><path d="M24 10V6h16v4"/><path d="M22 26h20M22 34h20M22 42h12"/><path d="M44 40c4 0 6 3 6 6s-3 6-6 6"/></svg>'
+};
+
+/* ================= HELPERS ================= */
+const $=s=>document.querySelector(s);
+const $$=s=>[...document.querySelectorAll(s)];
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad=n=>String(n).padStart(2,'0');
+function nowLocal(){const d=new Date();return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`}
+const dayOf=dt=>(dt||'').slice(0,10);
+function fmtD(dt){if(!dt)return '—';const [y,m,d]=dt.slice(0,10).split('-');return `${d}/${m}/${y}`}
+function fmtDT(dt){if(!dt)return '—';return fmtD(dt)+(dt.length>10?' '+dt.slice(11,16):'')}
+function addDays(day,n){const d=new Date(day+'T00:00');d.setDate(d.getDate()+n);return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`}
+const daysBetween=(a,b)=>(new Date(b)-new Date(a))/864e5;
+const isNum=v=>v!==''&&v!=null&&!isNaN(+v);
+const r2=v=>Math.round(v*100)/100;
+function fmtN(v,dec=2){if(!isNum(v))return '—';return (+v).toLocaleString('en-IN',{maximumFractionDigits:dec})}
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+function loadScript(src){return new Promise((res,rej)=>{if(document.querySelector(`script[src="${src}"]`)&&loadScript.done[src])return res();const s=document.createElement('script');s.src=src;s.onload=()=>{loadScript.done[src]=1;res()};s.onerror=()=>rej(new Error('Could not load '+src+' (check internet)'));document.head.appendChild(s)})}
+loadScript.done={};
+function toast(msg,ms=2200){const t=$('#toast');t.innerHTML=`<div>${esc(msg)}</div>`;clearTimeout(toast.t);toast.t=setTimeout(()=>t.innerHTML='',ms)}
+function modal(html){$('#modal').innerHTML=`<div class="bg"><div class="sheet">${html}</div></div>`;$('#modal .bg').onclick=e=>{if(e.target.classList.contains('bg'))closeModal()}}
+function closeModal(){$('#modal').innerHTML=''}
+
+/* ================= SETTINGS ================= */
+const S=Object.assign({
+  user:'',phone:'',waNumber:'',openingDefault:60,rate:3.5,lowFuel:30,
+  sites:DEFAULT_SITES.map((n,i)=>({id:'s'+(i+1),name:n})),
+  firebase:null
+},JSON.parse(localStorage.getItem('fr_settings')||'{}'));
+// add any new default sites missing from stored list (upgrade path)
+DEFAULT_SITES.forEach((n,i)=>{const id='s'+(i+1);if(!S.sites.find(s=>s.id===id))S.sites.push({id,name:n})});
+function saveS(){localStorage.setItem('fr_settings',JSON.stringify(S))}
+saveS();
+const siteById=id=>S.sites.find(s=>s.id===id);
+const siteName=id=>(siteById(id)||{}).name||id;
+
+/* ================= LOCAL DB (IndexedDB) ================= */
+const DB={db:null,
+open(){return new Promise((res,rej)=>{const r=indexedDB.open('fieldrecord',1);r.onupgradeneeded=()=>r.result.createObjectStore('records',{keyPath:'id'});r.onsuccess=()=>{this.db=r.result;res()};r.onerror=()=>rej(r.error)})},
+all(){return new Promise(res=>{const q=this.db.transaction('records').objectStore('records').getAll();q.onsuccess=()=>res(q.result||[])})},
+put(rec){return new Promise((res,rej)=>{const t=this.db.transaction('records','readwrite');t.objectStore('records').put(rec);t.oncomplete=()=>res();t.onerror=()=>rej(t.error)})}
+};
+let RECS=[];
+const live=()=>RECS.filter(r=>!r.deleted);
+let PENDING=new Set(JSON.parse(localStorage.getItem('fr_pending')||'[]'));
+const savePending=()=>localStorage.setItem('fr_pending',JSON.stringify([...PENDING]));
+async function putRec(rec,{fromRemote=false}={}){
+  if(!fromRemote){rec.updatedAt=Date.now();PENDING.add(rec.id);savePending()}
+  await DB.put(rec);
+  const i=RECS.findIndex(r=>r.id===rec.id);if(i>=0)RECS[i]=rec;else RECS.push(rec);
+  if(!fromRemote){Sync.push()}
+  status();
+}
+
+/* ================= DATA QUERIES ================= */
+function recsOf(sid,type){return live().filter(r=>r.site===sid&&(!type||r.type===type)).sort((a,b)=>a.dt<b.dt?-1:a.dt>b.dt?1:0)}
+function fval(r,f){
+  if(f==='fuel')return r.type==='diesel'&&isNum(r.data.closing)?+r.data.closing:undefined;
+  const v=r.data[f];return isNum(v)?+v:undefined;
+}
+/* history of a field across diesel+energy records of a site */
+function fieldHist(sid,f,{actualOnly=false}={}){
+  const out=[];
+  recsOf(sid).forEach(r=>{if(r.type==='request')return;const v=fval(r,f);if(v===undefined)return;const src=f==='fuel'?'CALC':(r.src||{})[f]||'MANUAL';if(actualOnly&&src==='EST')return;out.push({dt:r.dt,day:dayOf(r.dt),v,src,type:r.type})});
+  return out;
+}
+function lastBefore(hist,day,inclusive){for(let i=hist.length-1;i>=0;i--){if(inclusive?hist[i].day<=day:hist[i].day<day)return hist[i]}return null}
+function lastRecBefore(sid,type,day){const a=recsOf(sid,type).filter(r=>dayOf(r.dt)<day);return a[a.length-1]||null}
+function sameDayRec(sid,type,day){return recsOf(sid,type).find(r=>dayOf(r.dt)===day)}
+
+/* estimate a cumulative meter value at time dt from history */
+function estimateField(sid,f,dt){
+  let h=fieldHist(sid,f,{actualOnly:true}).filter(x=>x.dt<dt);
+  if(!h.length)return null;
+  const last=h[h.length-1];
+  const win=h.filter(x=>daysBetween(x.dt,last.dt)<=120);
+  const first=win[0];const span=daysBetween(first.dt,last.dt);
+  const rate=span>=0.5?(last.v-first.v)/span:0;
+  const el=Math.max(0,daysBetween(last.dt,dt));
+  let est=last.v+rate*el;
+  est=(f==='kwh'||f==='kvah')?Math.round(est):Math.round(est*10)/10;
+  return {last,rate,elapsed:el,est,points:win.length};
+}
+function opHist(sid,op,ch,f){
+  const out=[];recsOf(sid,'energy').forEach(r=>{const c=r.data.ops?.[op]?.[ch];if(!c||!isNum(c[f]))return;const src=(r.src||{})[`${op}.${ch}.${f}`]||'MANUAL';if(src==='EST')return;out.push({dt:r.dt,v:+c[f]})});return out;
+}
+
+/* ================= SYNC (Firebase Firestore) ================= */
+const Sync={ready:false,busy:false,err:'',unsub:null,
+async init(){
+  if(!S.firebase){status();return}
+  try{
+    await loadScript(CDN.fbApp);await loadScript(CDN.fbAuth);await loadScript(CDN.fbStore);
+    if(!firebase.apps.length)firebase.initializeApp(S.firebase);
+    await firebase.auth().signInAnonymously();
+    this.db=firebase.firestore();
+    this.ready=true;this.err='';
+    this.listen();await this.push();
+  }catch(e){this.err=e.message||String(e);console.warn(e)}
+  status();
+},
+listen(){
+  if(this.unsub)this.unsub();
+  const since=+localStorage.getItem('fr_lastPull')||0;
+  this.unsub=this.db.collection('records').where('updatedAt','>',since).onSnapshot(async snap=>{
+    let changed=false,max=+localStorage.getItem('fr_lastPull')||0;
+    for(const c of snap.docChanges()){
+      const d=c.doc.data();max=Math.max(max,d.updatedAt||0);
+      const loc=RECS.find(r=>r.id===d.id);
+      if(PENDING.has(d.id)&&loc&&loc.updatedAt>=d.updatedAt)continue;
+      if(!loc||(loc.updatedAt||0)<(d.updatedAt||0)){await putRec(d,{fromRemote:true});changed=true}
+    }
+    localStorage.setItem('fr_lastPull',max);
+    if(changed&&!/^#\/(diesel|energy|request)\/|^#\/msg/.test(location.hash))route();
+  },e=>{this.err=e.message;status()});
+},
+async push(){
+  if(!this.ready||!navigator.onLine||this.busy||!PENDING.size){status();return}
+  this.busy=true;status();
+  try{
+    const ids=[...PENDING];
+    for(let i=0;i<ids.length;i+=400){
+      const b=this.db.batch();
+      ids.slice(i,i+400).forEach(id=>{const r=RECS.find(x=>x.id===id);if(r)b.set(this.db.collection('records').doc(id),r)});
+      await b.commit();
+      ids.slice(i,i+400).forEach(id=>PENDING.delete(id));savePending();
+    }
+    this.err='';
+  }catch(e){this.err=e.message;console.warn(e)}
+  this.busy=false;status();
+},
+async fullResync(){localStorage.setItem('fr_lastPull','0');RECS.forEach(r=>PENDING.add(r.id));savePending();if(this.ready){this.listen();await this.push()}}
+};
+window.addEventListener('online',()=>{Sync.ready?Sync.push():Sync.init();status()});
+window.addEventListener('offline',status);
+function status(){
+  const el=$('#sync');if(!el)return;
+  let h;
+  if(Sync.busy)h='<div class="spin"></div>Syncing';
+  else if(!navigator.onLine)h=`<span class="dot off"></span>Offline${PENDING.size?' · '+PENDING.size:''}`;
+  else if(!S.firebase)h='<span class="dot wait"></span>Local only';
+  else if(Sync.err)h='<span class="dot off"></span>Sync error';
+  else if(PENDING.size)h=`<span class="dot wait"></span>${PENDING.size} pending`;
+  else h='<span class="dot"></span>Synced';
+  el.innerHTML=h;
+}
+
+/* ================= LAYOUT ================= */
+function header(title,back){
+  return `<div class="hd">${back?`<button class="ib" onclick="goBack('${back}')">${I.back}</button>`:'<div style="width:6px"></div>'}<h1>${esc(title)}</h1><div class="chip" id="sync" onclick="location.hash='#/settings'"></div></div>`;
+}
+function goBack(fallback){location.hash=fallback}
+function nav(active){
+  const it=[['#/','Home',I.home,'home'],['#/dash','Dashboard',I.dash,'dash'],['#/history','History',I.hist,'history'],['#/settings','Settings',I.set,'settings']];
+  return `<nav class="nav">${it.map(([h,l,ic,k])=>`<a href="${h}" class="${k===active?'on':''}">${ic}${l}</a>`).join('')}</nav>`;
+}
+function render(html,active){$('#app').innerHTML=html+nav(active);status();window.scrollTo(0,0)}
+
+/* ================= ROUTER ================= */
+function route(){
+  closeModal();
+  const p=(location.hash||'#/').slice(2).split('/');
+  const [a,b]=p;
+  if(!a)return Home();
+  if(a==='diesel')return b?DieselPage(b):SiteList('diesel');
+  if(a==='energy')return b?EnergyPage(b):SiteList('energy');
+  if(a==='request')return b?RequestPage(b):SiteList('request');
+  if(a==='msg')return MsgPage();
+  if(a==='dash')return Dashboard();
+  if(a==='history')return History();
+  if(a==='settings')return Settings();
+  Home();
+}
+window.addEventListener('hashchange',route);
+
+/* ================= HOME ================= */
+function Home(){
+  const today=dayOf(nowLocal());
+  const tD=live().filter(r=>r.type==='diesel'&&dayOf(r.dt)===today).length;
+  const tE=live().filter(r=>r.type==='energy'&&dayOf(r.dt)===today).length;
+  render(`
+  <div class="hero"><div class="top"><div class="chip" id="sync" onclick="location.hash='#/settings'"></div></div>
+    ${I.logo}<h1>FIELD RECORD</h1><p>DG • Energy • Diesel Management</p></div>
+  <div class="menu">
+    <button class="mcard m-g" onclick="location.hash='#/diesel'"><div class="ic">${I.fuel}</div><div><b>Diesel Filling</b><span>Record diesel filling and DG hours</span></div><span class="ar">${I.chev}</span></button>
+    <button class="mcard m-b" onclick="location.hash='#/energy'"><div class="ic">${I.meter}</div><div><b>Energy Reading</b><span>EB meter and operator readings</span></div><span class="ar">${I.chev}</span></button>
+    <button class="mcard m-o" onclick="location.hash='#/request'"><div class="ic">${I.wa}</div><div><b>Make Diesel Request Message</b><span>Generate and share via WhatsApp</span></div><span class="ar">${I.chev}</span></button>
+  </div>
+  <div class="qs"><div><b>${S.sites.length}</b><span>Sites</span></div><div><b>${tD}</b><span>Diesel today</span></div><div><b>${tE}</b><span>Energy today</span></div></div>
+  ${!S.user?`<div class="wrap" style="padding-top:0"><div class="note">Tip: set your name in <a href="#/settings">Settings</a> so records show who entered them.</div></div>`:''}
+  `,'home');
+}
+
+/* ================= SITE LIST ================= */
+function SiteList(mode){
+  const t={diesel:'Diesel Filling',energy:'Energy Reading',request:'Make Diesel Request'}[mode];
+  const acc={diesel:'',energy:'acc-b',request:'acc-o'}[mode];
+  const items=S.sites.map((s,i)=>{
+    const type=mode==='request'?'diesel':mode;const rs=recsOf(s.id,type);const last=rs[rs.length-1];
+    let sub=last?`Last: ${fmtD(last.dt)}`:'No records yet';
+    if(last&&mode!=='energy'&&isNum(last.data.closing))sub+=` · Fuel ${fmtN(last.data.closing,1)} L`;
+    return `<li><a href="#/${mode}/${s.id}"><span class="num">${i+1}</span><span class="nm"><b>${esc(s.name)}</b><small>${sub}</small></span><span class="ar">${I.chev}</span></a></li>`}).join('');
+  render(header(t,'#/')+`<div class="wrap" style="padding-bottom:0"><div class="sec-t">Select Site</div></div><ul class="slist ${acc}">${items}</ul>`,'home');
+}
+
+/* ================= READING FIELD COMPONENT ================= */
+function rField(key,label,val,src,{cam=true,est=true,hint=''}={}){
+  return `<div class="field"><div class="lbl">${label} <span class="badge bd-${src||'MANUAL'}" id="bd-${key}">${src==='EST'?'ESTIMATE':src||''}</span></div>
+  <div class="row"><input class="inp ${src==='EST'?'est':src==='OCR'?'ocr':''}" id="f-${key}" data-k="${key}" type="number" inputmode="decimal" step="any" value="${isNum(val)?val:''}" placeholder="Enter reading">
+  ${cam?`<button class="tbtn t-cam" data-cam="${key}">${I.cam}Camera</button>`:''}
+  ${est?`<button class="tbtn t-est" data-est="${key}">${I.est}Estimate</button>`:''}</div>
+  <div class="hint" id="h-${key}">${hint}</div><div class="err" id="e-${key}"></div></div>`;
+}
+function setSrc(F,key,src){
+  F.src[key]=src;const el=$('#f-'+key),bd=$('#bd-'+key);
+  if(el){el.classList.toggle('est',src==='EST');el.classList.toggle('ocr',src==='OCR')}
+  if(bd){bd.className='badge bd-'+src;bd.textContent=src==='EST'?'ESTIMATE':src==='OCR'?'OCR':''}
+}
+
+/* ================= OCR ================= */
+let ocrWorker=null;
+async function getWorker(){
+  if(ocrWorker)return ocrWorker;
+  await loadScript(CDN.tess);
+  ocrWorker=await Tesseract.createWorker('eng');
+  await ocrWorker.setParameters({tessedit_char_whitelist:'0123456789.',tessedit_pageseg_mode:'7'});
+  return ocrWorker;
+}
+function prepImage(file){
+  return new Promise((res,rej)=>{const img=new Image();img.onload=()=>{
+    const sc=Math.min(1,1400/Math.max(img.width,img.height));const w=Math.round(img.width*sc),h=Math.round(img.height*sc);
+    const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');x.drawImage(img,0,0,w,h);
+    const orig=c.toDataURL('image/jpeg',.85);
+    const d=x.getImageData(0,0,w,h),p=d.data;let sum=0;
+    for(let i=0;i<p.length;i+=4){const g=.299*p[i]+.587*p[i+1]+.114*p[i+2];p[i]=p[i+1]=p[i+2]=g;sum+=g}
+    const avg=sum/(p.length/4);
+    // dark digits on light LCD -> keep; light digits on dark -> invert
+    const inv=avg<110;
+    for(let i=0;i<p.length;i+=4){let g=p[i];if(inv)g=255-g;g=g<(inv?255-avg:avg)*0.85?0:255;p[i]=p[i+1]=p[i+2]=g}
+    x.putImageData(d,0,0);res({orig,proc:c.toDataURL('image/png')});URL.revokeObjectURL(img.src)};
+    img.onerror=rej;img.src=URL.createObjectURL(file)});
+}
+function pickNumber(text){
+  const m=(text||'').replace(/\s+/g,'').match(/\d+(\.\d+)?/g)||[];
+  return m.sort((a,b)=>b.replace('.','').length-a.replace('.','').length)[0]||'';
+}
+/* opens camera; cb(value) */
+function openOCR(title,cb,choices){
+  const inp=$('#camIn');inp.value='';
+  inp.onchange=async()=>{
+    const f=inp.files[0];if(!f)return;
+    let target=choices?choices[0]:null;
+    modal(`<h3>${esc(title)}</h3><div class="loader"><div class="spin"></div>Reading meter…</div>`);
+    try{
+      const {orig,proc}=await prepImage(f);
+      modal(`<h3>${esc(title)}</h3><img class="ocrimg" src="${orig}"><div class="loader" id="ocrl"><div class="spin"></div>Recognising digits… (first use downloads OCR data)</div><div id="ocrr"></div>`);
+      const w=await getWorker();
+      let r=await w.recognize(proc);let v=pickNumber(r.data.text);
+      if(!v){r=await w.recognize(orig);v=pickNumber(r.data.text)}
+      $('#ocrl').remove();
+      $('#ocrr').innerHTML=`<div class="lbl mt">Detected Reading</div>
+        <input class="inp" id="ocrv" type="number" inputmode="decimal" step="any" value="${esc(v)}" placeholder="Not detected – type it">
+        <div class="hint">${v?'Check the value against the meter and correct if needed.':'Could not read the digits clearly. Retake closer, or type the value.'}</div>
+        ${choices?`<div class="lbl mt">Apply to</div><div class="opts">${choices.map((c,i)=>`<button data-ch="${c}" class="${i?'':'on'}">${c}</button>`).join('')}</div>`:''}
+        <div class="btns"><button class="btn b-gr" id="ocrRe">${I.cam}Retake</button><button class="btn b-g" id="ocrUse">${I.ok}Use Reading</button></div>`;
+      $$('[data-ch]').forEach(b=>b.onclick=()=>{$$('[data-ch]').forEach(x=>x.classList.remove('on'));b.classList.add('on');target=b.dataset.ch});
+      $('#ocrRe').onclick=()=>{closeModal();openOCR(title,cb,choices)};
+      $('#ocrUse').onclick=()=>{const val=$('#ocrv').value;if(!isNum(val))return toast('Enter a valid number');closeModal();cb(val,target)};
+    }catch(e){modal(`<h3>Camera OCR</h3><div class="warn">${I.alert}${esc(e.message||e)}</div><button class="btn b-gr" onclick="closeModal()">Close</button>`)}
+  };
+  inp.click();
+}
+
+/* estimate dialog */
+function showEstimate(sid,key,label,dt,cb){
+  const e=estimateField(sid,key,dt);
+  if(!e)return toast('No previous actual reading for this site to estimate from');
+  modal(`<h3>Estimate ${esc(label)}</h3>
+  <div class="dl"><span>Previous reading</span><b>${fmtN(e.last.v)}</b><span>Previous date</span><b>${fmtDT(e.last.dt)}</b>
+  <span>Average per day</span><b>${e.points>1?fmtN(e.rate,2):'— (only 1 reading)'}</b><span>Days elapsed</span><b>${fmtN(e.elapsed,1)}</b></div>
+  <div class="bigv o"><div style="font-size:12px;color:var(--m)">Estimated reading</div><b>${fmtN(e.est)}</b></div>
+  <div class="note">This value will be saved and marked as <b>ESTIMATE</b>, never as an actual meter reading.</div>
+  <div class="btns"><button class="btn b-gr" onclick="closeModal()">Cancel</button><button class="btn b-o" id="useEst">Use Estimated Value</button></div>`);
+  $('#useEst').onclick=()=>{closeModal();cb(e.est)};
+}
+
+/* ================= DIESEL FILLING PAGE ================= */
+function DieselPage(sid){
+  const site=siteById(sid);if(!site)return SiteList('diesel');
+  const F={dt:nowLocal(),src:{},kwh:'',dg:'',piu:'',opening:'',filled:''};
+  const prevInfo=()=>{
+    const day=dayOf(F.dt);
+    const prev=lastRecBefore(sid,'diesel',day);
+    const kwhP=lastBefore(fieldHist(sid,'kwh'),day,false);
+    return {prev,kwhP};
+  };
+  let P=prevInfo();
+  F.opening=P.prev&&isNum(P.prev.data.closing)?Math.max(0,+P.prev.data.closing):S.openingDefault;
+  function hints(){
+    P=prevInfo();
+    $('#h-kwh').textContent=P.kwhP?`Previous: ${fmtN(P.kwhP.v)} on ${fmtD(P.kwhP.dt)}`:'No previous reading';
+    $('#h-dg').textContent=P.prev&&isNum(P.prev.data.dg)?`Previous: ${fmtN(P.prev.data.dg)} on ${fmtD(P.prev.dt)}`:'No previous DG reading (first record)';
+    $('#h-piu').textContent=P.prev&&isNum(P.prev.data.piu)?`Previous: ${fmtN(P.prev.data.piu)} on ${fmtD(P.prev.dt)}`:'No previous PIU reading';
+    $('#pinfo').innerHTML=`<span>Previous Date</span><b>${P.prev?fmtD(P.prev.dt):'—'}</b><span>Last DG HMR</span><b>${P.prev?fmtN(P.prev.data.dg):'—'}</b><span>Last EB kWh</span><b>${P.kwhP?fmtN(P.kwhP.v):'—'}</b><span>Last PIU HMR</span><b>${P.prev?fmtN(P.prev.data.piu):'—'}</b><span>Last Fuel</span><b>${P.prev?fmtN(P.prev.data.closing,1)+' L':'—'}</b>`;
+  }
+  function calc(){
+    const prevDg=P.prev&&isNum(P.prev.data.dg)?+P.prev.data.dg:null;
+    const dgDiff=isNum(F.dg)&&prevDg!=null?r2(+F.dg-prevDg):0;
+    const cons=r2(Math.max(0,dgDiff)*S.rate);
+    const closing=r2((+F.opening||0)+(+F.filled||0)-cons);
+    return {prevDg,dgDiff,cons,closing};
+  }
+  function upd(){
+    const c=calc();
+    ['kwh','dg','piu'].forEach(k=>{const e=$('#e-'+k);e.textContent='';$('#f-'+k).classList.remove('bad')});
+    const chk=(k,prev)=>{if(isNum(F[k])&&prev!=null&&+F[k]<prev){$('#e-'+k).textContent=`Lower than previous reading (${fmtN(prev)}). Check meter.`;$('#f-'+k).classList.add('bad')}};
+    chk('kwh',P.kwhP?P.kwhP.v:null);chk('dg',c.prevDg);chk('piu',P.prev&&isNum(P.prev.data.piu)?+P.prev.data.piu:null);
+    $('#calc').className='calc'+(c.closing<0?' neg':'');
+    $('#calc').innerHTML=`<div class="l"><span>Opening balance</span><b>${fmtN(F.opening||0,1)} L</b></div>
+    <div class="l"><span>Diesel filled</span><b>${fmtN(F.filled||0,1)} L</b></div>
+    <div class="l"><span>DG hours difference</span><b>${fmtN(c.dgDiff)} Hrs</b></div>
+    <div class="l"><span>Diesel consumption (${S.rate} L/Hr)</span><b>${fmtN(c.cons,1)} L</b></div>
+    <div class="l tot"><span>Closing Diesel Balance</span><b>${fmtN(c.closing,1)} L</b></div>`;
+    $('#negw').innerHTML=c.closing<0?`<div class="warn">${I.alert}<span>Closing balance is negative (${fmtN(c.closing,1)} L). Check DG hours, opening balance or diesel filled before saving.</span></div>`:'';
+  }
+  render(header('Diesel Filling - '+site.name,'#/diesel')+`<div class="wrap">
+    <div class="info" id="pinfo"></div>
+    <div class="field"><div class="lbl">Date &amp; Time</div><input class="inp sm" type="datetime-local" id="f-dt" value="${F.dt}"></div>
+    ${rField('kwh','EB kWh Reading','', '')}
+    ${rField('dg','DG Running Hours (HMR)','','',{est:false})}
+    ${rField('piu','PIU Running Hours (HMR)','','',{est:false})}
+    <div class="g2"><div class="field"><div class="lbl">Opening Diesel (L)</div><input class="inp" id="f-opening" data-k="opening" type="number" inputmode="decimal" step="any" value="${F.opening}"></div>
+    <div class="field"><div class="lbl">Diesel Filled (L)</div><input class="inp" id="f-filled" data-k="filled" type="number" inputmode="decimal" step="any" placeholder="0"></div></div>
+    <div class="hint" style="margin:-8px 0 10px">Opening balance = last closing balance (or ${S.openingDefault} L for the first record). Edit if a dip shows otherwise.</div>
+    <div id="calc" class="calc"></div><div id="negw"></div>
+    <div class="btns"><button class="btn b-g" id="save">${I.save}Save Record</button><button class="btn b-gr" id="clr">${I.clear}Clear</button></div>
+  </div>`,'home');
+  hints();upd();
+  $('#f-dt').onchange=e=>{F.dt=e.target.value||nowLocal();hints();if(!$('#f-opening').dataset.touched){const p=P.prev;F.opening=p&&isNum(p.data.closing)?Math.max(0,+p.data.closing):S.openingDefault;$('#f-opening').value=F.opening}upd()};
+  $$('[data-k]').forEach(el=>el.oninput=()=>{const k=el.dataset.k;F[k]=el.value;if(k==='opening')el.dataset.touched=1;if(['kwh','dg','piu'].includes(k))setSrc(F,k,'MANUAL');upd()});
+  $$('[data-cam]').forEach(b=>b.onclick=()=>{const k=b.dataset.cam;openOCR({kwh:'EB kWh',dg:'DG HMR',piu:'PIU HMR'}[k],v=>{F[k]=v;$('#f-'+k).value=v;setSrc(F,k,'OCR');upd()})});
+  $$('[data-est]').forEach(b=>b.onclick=()=>{const k=b.dataset.est;showEstimate(sid,k,'EB kWh',F.dt,v=>{F[k]=v;$('#f-'+k).value=v;setSrc(F,k,'EST');upd()})});
+  $('#clr').onclick=()=>{if(confirm('Clear all entered values?'))DieselPage(sid)};
+  $('#save').onclick=async()=>{
+    if(!isNum(F.dg))return toast('Enter DG running hours');
+    const c=calc();
+    if(c.closing<0&&!confirm(`Closing balance is NEGATIVE (${fmtN(c.closing,1)} L).\nThis usually means a wrong reading. Save anyway?`))return;
+    if($$('.inp.bad').length&&!confirm('Some readings are lower than the previous reading (meter reset/replaced?). Save anyway?'))return;
+    const day=dayOf(F.dt);const dup=sameDayRec(sid,'diesel',day);
+    if(dup&&!confirm(`A diesel record for ${site.name} on ${fmtD(day)} already exists.\nOK = replace it with this one\nCancel = do not save`))return;
+    const rec={id:dup?dup.id:uid(),type:'diesel',site:sid,siteName:site.name,dt:F.dt,user:S.user,phone:S.phone,createdAt:dup?dup.createdAt:Date.now(),deleted:false,
+      data:{kwh:isNum(F.kwh)?+F.kwh:'',dg:+F.dg,piu:isNum(F.piu)?+F.piu:'',opening:+F.opening||0,filled:+F.filled||0,dgDiff:c.dgDiff,consumption:c.cons,closing:c.closing,rate:S.rate,
+        prev:P.prev?{dt:P.prev.dt,dg:P.prev.data.dg,piu:P.prev.data.piu,closing:P.prev.data.closing}:null,prevKwh:P.kwhP?{dt:P.kwhP.dt,v:P.kwhP.v}:null},
+      src:{kwh:isNum(F.kwh)?F.src.kwh||'MANUAL':'',dg:F.src.dg||'MANUAL',piu:isNum(F.piu)?F.src.piu||'MANUAL':''}};
+    await putRec(rec);
+    modal(`<div class="okbig"><div class="c">${I.ok}</div><b>Record Saved Successfully!</b></div>
+    <div class="dl"><span>Site</span><b>${esc(site.name)}</b><span>Date</span><b>${fmtDT(rec.dt)}</b><span>EB kWh</span><b>${fmtN(rec.data.kwh)} ${rec.src.kwh==='EST'?'(Est.)':''}</b><span>DG HMR</span><b>${fmtN(rec.data.dg)}</b><span>PIU HMR</span><b>${fmtN(rec.data.piu)}</b><span>Opening</span><b>${fmtN(rec.data.opening,1)} L</b><span>Filled</span><b>${fmtN(rec.data.filled,1)} L</b><span>Consumption</span><b>${fmtN(rec.data.consumption,1)} L</b><span>Closing balance</span><b>${fmtN(rec.data.closing,1)} L</b></div>
+    <div class="btns"><button class="btn b-gr" onclick="location.hash='#/history'">View History</button><button class="btn b-g" onclick="location.hash='#/'">Back to Menu</button></div>`);
+  };
+}
+
+/* ================= ENERGY PAGE ================= */
+function EnergyPage(sid){
+  const site=siteById(sid);if(!site)return SiteList('energy');
+  const F={dt:nowLocal(),kwh:'',kvah:'',src:{},ops:{}};
+  OPS.forEach(o=>{F.ops[o]={};CHS.forEach(c=>F.ops[o][c]={kw:'',amp:''})});
+  let tab=OPS[0];let P;
+  const prevE=()=>lastRecBefore(sid,'energy',dayOf(F.dt));
+  function hints(){
+    P=prevE();const day=dayOf(F.dt);
+    const k=lastBefore(fieldHist(sid,'kwh'),day,false),v=lastBefore(fieldHist(sid,'kvah'),day,false);
+    $('#h-kwh').textContent=k?`Previous: ${fmtN(k.v)} on ${fmtD(k.dt)}`:'No previous reading';
+    $('#h-kvah').textContent=v?`Previous: ${fmtN(v.v)} on ${fmtD(v.dt)}`:'No previous reading';
+    $('#pinfo').innerHTML=`<span>Previous Date</span><b>${P?fmtD(P.dt):'—'}</b><span></span><b></b><span>EB kWh</span><b>${k?fmtN(k.v):'—'}</b><span>EB kVAh</span><b>${v?fmtN(v.v):'—'}</b>`;
+    hints.k=k;hints.v=v;
+  }
+  function opTable(){
+    const prevOps=P?.data.ops?.[tab]||{};
+    $('#tabs').innerHTML=OPS.map(o=>{const has=CHS.some(c=>isNum(F.ops[o][c].kw)||isNum(F.ops[o][c].amp));return `<button data-tab="${o}" class="${o===tab?'on':''}">${o}${has?'<span class="tk"></span>':''}</button>`}).join('');
+    $('#optbl').innerHTML=`<tr><th>CH</th><th>kW</th><th>Amp</th><th></th></tr>`+CHS.map(c=>{
+      const v=F.ops[tab][c],pv=prevOps[c]||{};
+      const cls=f=>{const s=F.src[`${tab}.${c}.${f}`];return s==='EST'?'est':s==='OCR'?'ocr':''};
+      return `<tr><td>CH${c}</td>
+      <td><input class="inp ${cls('kw')}" data-op="${c}" data-f="kw" type="number" inputmode="decimal" step="any" value="${v.kw}" placeholder="${isNum(pv.kw)?'prev '+pv.kw:'kW'}"></td>
+      <td><input class="inp ${cls('amp')}" data-op="${c}" data-f="amp" type="number" inputmode="decimal" step="any" value="${v.amp}" placeholder="${isNum(pv.amp)?'prev '+pv.amp:'A'}"></td>
+      <td><div class="mini"><button class="mb t-cam" data-ocam="${c}">${I.cam}</button><button class="mb t-est" data-oest="${c}">${I.est}</button></div></td></tr>`}).join('');
+    $$('[data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;opTable()});
+    $$('[data-op]').forEach(el=>el.oninput=()=>{const c=el.dataset.op,f=el.dataset.f;F.ops[tab][c][f]=el.value;F.src[`${tab}.${c}.${f}`]='MANUAL';el.classList.remove('est','ocr')});
+    $$('[data-ocam]').forEach(b=>b.onclick=()=>{const c=b.dataset.ocam;openOCR(`${tab} CH${c}`,(v,t)=>{const f=t==='Amp'?'amp':'kw';F.ops[tab][c][f]=v;F.src[`${tab}.${c}.${f}`]='OCR';opTable()},['kW','Amp'])});
+    $$('[data-oest]').forEach(b=>b.onclick=()=>{const c=b.dataset.oest;let got=0;
+      ['kw','amp'].forEach(f=>{const h=opHist(sid,tab,c,f).slice(-3);if(!h.length)return;const avg=r2(h.reduce((s,x)=>s+x.v,0)/h.length);F.ops[tab][c][f]=avg;F.src[`${tab}.${c}.${f}`]='EST';got++});
+      if(!got)return toast(`No previous ${tab} CH${c} readings to estimate from`);
+      toast('Estimated from average of last readings');opTable()});
+  }
+  render(header('Energy Reading - '+site.name,'#/energy')+`<div class="wrap">
+    <div class="info b" id="pinfo"></div>
+    <div class="field"><div class="lbl">Date &amp; Time</div><input class="inp sm" type="datetime-local" id="f-dt" value="${F.dt}"></div>
+    ${rField('kwh','EB kWh Reading','','')}
+    ${rField('kvah','EB kVAh Reading','','')}
+    <div class="sec-t mt">Operator Readings</div>
+    <div class="tabs" id="tabs"></div>
+    <div class="scroll"><table class="optbl" id="optbl"></table></div>
+    <div class="hint" style="margin:-6px 0 12px">Orange = estimate, blue = camera. Switch operators freely — values are kept until you save.</div>
+    <div class="btns"><button class="btn b-g" id="save">${I.save}Save Record</button><button class="btn b-gr" id="clr">${I.clear}Clear</button></div>
+  </div>`,'home');
+  hints();opTable();
+  const chk=()=>['kwh','kvah'].forEach(k=>{const p=k==='kwh'?hints.k:hints.v;const bad=isNum(F[k])&&p&&+F[k]<p.v;$('#f-'+k).classList.toggle('bad',!!bad);$('#e-'+k).textContent=bad?`Lower than previous reading (${fmtN(p.v)}). Check meter.`:''});
+  $('#f-dt').onchange=e=>{F.dt=e.target.value||nowLocal();hints();opTable();chk()};
+  $$('[data-k]').forEach(el=>el.oninput=()=>{const k=el.dataset.k;F[k]=el.value;setSrc(F,k,'MANUAL');chk()});
+  $$('[data-cam]').forEach(b=>b.onclick=()=>{const k=b.dataset.cam;openOCR(k==='kwh'?'EB kWh':'EB kVAh',v=>{F[k]=v;$('#f-'+k).value=v;setSrc(F,k,'OCR');chk()})});
+  $$('[data-est]').forEach(b=>b.onclick=()=>{const k=b.dataset.est;showEstimate(sid,k,k==='kwh'?'EB kWh':'EB kVAh',F.dt,v=>{F[k]=v;$('#f-'+k).value=v;setSrc(F,k,'EST');chk()})});
+  $('#clr').onclick=()=>{if(confirm('Clear all entered values (all operators)?'))EnergyPage(sid)};
+  $('#save').onclick=async()=>{
+    const anyOp=OPS.some(o=>CHS.some(c=>isNum(F.ops[o][c].kw)||isNum(F.ops[o][c].amp)));
+    if(!isNum(F.kwh)&&!isNum(F.kvah)&&!anyOp)return toast('Nothing to save – enter at least one reading');
+    if($$('.inp.bad').length&&!confirm('Some readings are lower than previous (meter reset/replaced?). Save anyway?'))return;
+    const day=dayOf(F.dt);const dup=sameDayRec(sid,'energy',day);
+    if(dup&&!confirm(`An energy record for ${site.name} on ${fmtD(day)} already exists.\nOK = replace it\nCancel = do not save`))return;
+    const ops={};const src={};
+    OPS.forEach(o=>{ops[o]={};CHS.forEach(c=>{const v=F.ops[o][c];ops[o][c]={kw:isNum(v.kw)?+v.kw:'',amp:isNum(v.amp)?+v.amp:''};['kw','amp'].forEach(f=>{if(isNum(v[f]))src[`${o}.${c}.${f}`]=F.src[`${o}.${c}.${f}`]||'MANUAL'})})});
+    if(isNum(F.kwh))src.kwh=F.src.kwh||'MANUAL';if(isNum(F.kvah))src.kvah=F.src.kvah||'MANUAL';
+    const rec={id:dup?dup.id:uid(),type:'energy',site:sid,siteName:site.name,dt:F.dt,user:S.user,phone:S.phone,createdAt:dup?dup.createdAt:Date.now(),deleted:false,
+      data:{kwh:isNum(F.kwh)?+F.kwh:'',kvah:isNum(F.kvah)?+F.kvah:'',ops,prevKwh:hints.k?{dt:hints.k.dt,v:hints.k.v}:null,prevKvah:hints.v?{dt:hints.v.dt,v:hints.v.v}:null},src};
+    await putRec(rec);
+    modal(`<div class="okbig"><div class="c">${I.ok}</div><b>Energy Reading Saved!</b></div>
+    <div class="dl"><span>Site</span><b>${esc(site.name)}</b><span>Date</span><b>${fmtDT(rec.dt)}</b><span>EB kWh</span><b>${fmtN(rec.data.kwh)} ${src.kwh==='EST'?'(Est.)':''}</b><span>EB kVAh</span><b>${fmtN(rec.data.kvah)} ${src.kvah==='EST'?'(Est.)':''}</b><span>Operators filled</span><b>${OPS.filter(o=>CHS.some(c=>isNum(ops[o][c].kw)||isNum(ops[o][c].amp))).join(', ')||'—'}</b></div>
+    <div class="btns"><button class="btn b-gr" onclick="location.hash='#/history'">View History</button><button class="btn b-g" onclick="location.hash='#/'">Back to Menu</button></div>`);
+  };
+}
+
+/* ================= DIESEL REQUEST ================= */
+const RF=[['kwh','EB kWh'],['kvah','EB kVAh'],['dg','DG HMR'],['piu','PIU HMR'],['fuel','Fuel level']];
+function buildSnapshot(sid){
+  const H={};RF.forEach(([f])=>H[f]=fieldHist(sid,f));
+  const cur={},prev={};
+  RF.forEach(([f])=>{const h=H[f];if(h.length)cur[f]=h[h.length-1]});
+  const curDays=['dg','fuel'].map(f=>cur[f]?.day).filter(Boolean);
+  const curDay=curDays.length?curDays.sort().pop():Object.values(cur).map(x=>x.day).sort().pop();
+  if(!curDay)return null;
+  const target=addDays(curDay,-30);let fallback=false;
+  RF.forEach(([f])=>{let p=lastBefore(H[f],target,true);if(!p){p=H[f].find(x=>x.day<curDay)||null;if(p)fallback=true}if(p)prev[f]=p});
+  const prevDays=['dg','fuel'].map(f=>prev[f]?.day).filter(Boolean);
+  const prevDay=prevDays.length?prevDays.sort().pop():Object.values(prev).map(x=>x.day).sort().pop()||'';
+  const fills=recsOf(sid,'diesel').filter(r=>prevDay&&dayOf(r.dt)>prevDay&&dayOf(r.dt)<=curDay&&+r.data.filled>0);
+  const filled=r2(fills.reduce((s,r)=>s+(+r.data.filled||0),0));
+  return {curDay,prevDay,target,fallback,filled,fills:fills.length,
+    cur:Object.fromEntries(RF.map(([f])=>[f,cur[f]?{v:cur[f].v,src:cur[f].src}:{v:'',src:''}])),
+    prev:Object.fromEntries(RF.map(([f])=>[f,prev[f]?{v:prev[f].v,src:prev[f].src}:{v:'',src:''}]))};
+}
+function reqCalc(R){
+  const d=f=>isNum(R.cur[f].v)&&isNum(R.prev[f].v)?r2(R.cur[f].v-R.prev[f].v):'';
+  const dg=d('dg');
+  const fuelDiff=isNum(R.cur.fuel.v)&&isNum(R.prev.fuel.v)?r2(R.prev.fuel.v-R.cur.fuel.v):'';
+  const cons=isNum(dg)?r2(Math.max(0,dg)*S.rate):'';
+  const tankUse=isNum(fuelDiff)?r2(fuelDiff+(+R.filled||0)):'';
+  const req=isNum(cons)&&isNum(R.cur.fuel.v)?r2(Math.max(0,cons-R.cur.fuel.v)):'';
+  return {kwh:d('kwh'),kvah:d('kvah'),dg,piu:d('piu'),fuelDiff,cons,tankUse,req};
+}
+function reqMessage(sid,R,C){
+  const e=(o)=>o.src==='EST'?' (Est.)':'';
+  const v=(o,dec=2)=>fmtN(o.v,dec)+e(o);
+  const L=[];
+  L.push(siteName(sid),'',`Current: ${fmtD(R.curDay)}`,`EB kWh: ${v(R.cur.kwh)}`,`EB kVAh: ${v(R.cur.kvah)}`,`DG HMR: ${v(R.cur.dg)}`,`PIU HMR: ${v(R.cur.piu)}`,`Fuel level: ${fmtN(R.cur.fuel.v,1)} Litres`,'',
+    `Previous: ${fmtD(R.prevDay)}`,`EB kWh: ${v(R.prev.kwh)}`,`EB kVAh: ${v(R.prev.kvah)}`,`DG HMR: ${v(R.prev.dg)}`,`PIU HMR: ${v(R.prev.piu)}`,`Fuel level: ${fmtN(R.prev.fuel.v,1)} Litres`,'',
+    'Consumption and Difference Summary',`EB kWh Consumption: ${fmtN(C.kwh)}`,`EB kVAh Consumption: ${fmtN(C.kvah)}`,`DG Running Hours: ${fmtN(C.dg)}`,`PIU Running Hours: ${fmtN(C.piu)}`,`Fuel Level Difference: ${fmtN(C.fuelDiff,1)} Litres`);
+  if(+R.filled>0)L.push(`Diesel Filled in Period: ${fmtN(R.filled,1)} Litres`);
+  L.push(`DG Diesel Consumption (${S.rate} L/Hr): ${fmtN(C.cons,1)} Litres`,`Diesel Requirement: ${fmtN(C.req,1)} Litres`,'','Kindly arrange the required diesel filling.');
+  return L.join('\n');
+}
+let MSG=null;
+function RequestPage(sid){
+  const site=siteById(sid);if(!site)return SiteList('request');
+  const R=buildSnapshot(sid);
+  if(!R){render(header('Diesel Request - '+site.name,'#/request')+`<div class="wrap"><div class="empty">No saved readings for ${esc(site.name)} yet.<br><br>Save a Diesel Filling record (and an Energy Reading for kVAh) first.</div><button class="btn b-g" onclick="location.hash='#/diesel/${sid}'">Go to Diesel Filling</button></div>`,'home');return}
+  const box=(k,cls,title,day)=>`<div class="cbox ${cls}"><h4>${title}</h4><div class="d"><input type="date" id="d-${k}" value="${day||''}" style="border:0;background:transparent;font:inherit;font-weight:800;width:100%;padding:0"></div>
+    ${RF.map(([f,l])=>`<div class="kv"><span>${l}${f==='fuel'?' (L)':''}</span><input type="number" step="any" inputmode="decimal" data-rk="${k}" data-rf="${f}" value="${isNum(R[k][f].v)?R[k][f].v:''}" class="${!isNum(R[k][f].v)?'miss':R[k][f].src==='EST'?'est':''}" placeholder="needed"></div>`).join('')}</div>`;
+  render(header('Diesel Request - '+site.name,'#/request')+`<div class="wrap">
+    <div id="missing"></div>
+    ${R.fallback?`<div class="note">No reading found 30 days back (on/before ${fmtD(R.target)}). Using the oldest available earlier reading instead.</div>`:''}
+    <div class="cmp">${box('cur','c','Current Reading',R.curDay)}${box('prev','p','Previous Reading',R.prevDay)}</div>
+    <div class="field"><div class="lbl">Diesel filled between these dates (L)</div><input class="inp sm" id="r-filled" type="number" step="any" inputmode="decimal" value="${R.filled}"><div class="hint">${R.fills} filling record(s) found in Diesel Filling history. Edit only if a filling was not recorded.</div></div>
+    <div class="sum" id="sum"></div>
+    <button class="btn b-o" id="gen">${I.wa}Generate Message</button>
+  </div>`,'home');
+  function upd(){
+    const C=reqCalc(R);
+    const miss=[];RF.forEach(([f,l])=>{if(!isNum(R.cur[f].v))miss.push('Current '+l);if(!isNum(R.prev[f].v))miss.push('Previous '+l)});
+    if(!R.prevDay)miss.push('Previous date');
+    $('#missing').innerHTML=miss.length?`<div class="warn">${I.alert}<span>Missing information: ${miss.join(', ')}. Please enter it in the red boxes below.</span></div>`:'';
+    $('#sum').innerHTML=`<h4>Consumption and Difference</h4>
+    <div class="l"><span>EB kWh Consumption</span><b>${fmtN(C.kwh)}</b></div>
+    <div class="l"><span>EB kVAh Consumption</span><b>${fmtN(C.kvah)}</b></div>
+    <div class="l"><span>DG Running Hours</span><b>${fmtN(C.dg)}</b></div>
+    <div class="l"><span>PIU Running Hours</span><b>${fmtN(C.piu)}</b></div>
+    <div class="l"><span>Fuel Level Difference</span><b>${fmtN(C.fuelDiff,1)} L</b></div>
+    <div class="l"><span>Diesel Filled in Period</span><b>${fmtN(R.filled||0,1)} L</b></div>
+    <div class="l"><span>DG Consumption (${S.rate} L/Hr)</span><b>${fmtN(C.cons,1)} L</b></div>
+    ${isNum(C.tankUse)&&isNum(C.cons)&&Math.abs(C.tankUse-C.cons)>5?`<div class="l" style="color:var(--y)"><span>Tank-based use (prev + filled − current)</span><b>${fmtN(C.tankUse,1)} L</b></div>`:''}
+    <div class="l req"><span>Diesel Requirement (Est.)</span><b>${fmtN(C.req,1)} L</b></div>
+    <div class="hint">Requirement = DG consumption for the period − current fuel balance (expected need for the next similar period).</div>`;
+    $('#gen').disabled=!!miss.length;
+    return C;
+  }
+  upd();
+  $$('[data-rk]').forEach(el=>el.oninput=()=>{R[el.dataset.rk][el.dataset.rf]={v:isNum(el.value)?+el.value:'',src:'MANUAL'};el.classList.toggle('miss',!isNum(el.value));el.classList.remove('est');upd()});
+  $('#d-cur').onchange=e=>{R.curDay=e.target.value;upd()};
+  $('#d-prev').onchange=e=>{R.prevDay=e.target.value;upd()};
+  $('#r-filled').oninput=e=>{R.filled=+e.target.value||0;upd()};
+  $('#gen').onclick=async()=>{
+    const C=upd();const text=reqMessage(sid,R,C);
+    const rec={id:uid(),type:'request',site:sid,siteName:site.name,dt:nowLocal(),user:S.user,phone:S.phone,createdAt:Date.now(),deleted:false,
+      data:{curDay:R.curDay,prevDay:R.prevDay,cur:R.cur,prev:R.prev,filled:R.filled,calc:C,requirement:C.req,message:text},src:{}};
+    await putRec(rec);
+    MSG={sid,text,recId:rec.id};location.hash='#/msg';
+  };
+}
+function MsgPage(){
+  if(!MSG)return location.hash='#/request';
+  render(header('Generated Message','#/request/'+MSG.sid)+`<div class="wrap">
+    <textarea class="msg" id="msg" readonly>${esc(MSG.text)}</textarea>
+    <div class="btns"><button class="btn b-g" id="cp">${I.copy}Copy</button><button class="btn b-wa" id="wa">${I.wa}WhatsApp</button><button class="btn b-b" id="ed">${I.edit}Edit</button></div>
+    <div class="hint mt">WhatsApp opens with the message ready — choose the contact/group and press send yourself.</div>
+  </div>`,'home');
+  const ta=$('#msg');
+  const persist=async()=>{MSG.text=ta.value;const r=RECS.find(x=>x.id===MSG.recId);if(r&&r.data.message!==MSG.text){r.data.message=MSG.text;await putRec(r)}};
+  $('#ed').onclick=()=>{if(ta.readOnly){ta.readOnly=false;ta.focus();$('#ed').innerHTML=I.ok+'Done'}else{ta.readOnly=true;$('#ed').innerHTML=I.edit+'Edit';persist();toast('Message updated')}};
+  $('#cp').onclick=async()=>{await persist();try{await navigator.clipboard.writeText(ta.value)}catch(e){ta.readOnly=false;ta.select();document.execCommand('copy');ta.readOnly=true}toast('Message copied')};
+  $('#wa').onclick=async()=>{await persist();const n=(S.waNumber||'').replace(/\D/g,'');window.open(`https://wa.me/${n}?text=${encodeURIComponent(ta.value)}`,'_blank')};
+}
+
+/* ================= DASHBOARD ================= */
+function latestBySite(){
+  return S.sites.map(s=>{const g=f=>{const h=fieldHist(s.id,f);return h[h.length-1]};const ds=recsOf(s.id,'diesel');return {s,fuel:g('fuel'),dg:g('dg'),kwh:g('kwh'),kvah:g('kvah'),last:ds[ds.length-1]}});
+}
+function Dashboard(tab='diesel'){
+  const L=latestBySite();
+  const totalFuel=r2(L.reduce((a,x)=>a+(x.fuel&&x.fuel.v>0?x.fuel.v:0),0));
+  const low=L.filter(x=>x.fuel&&x.fuel.v<S.lowFuel).length;
+  const totalDg=r2(L.reduce((a,x)=>a+(x.dg?x.dg.v:0),0));
+  const totalKwh=L.reduce((a,x)=>a+(x.kwh?x.kwh.v:0),0);
+  const recent=live().filter(r=>r.type===tab).sort((a,b)=>b.dt<a.dt?-1:1).slice(0,10);
+  const rows={
+    diesel:['<th>Date</th><th>Site</th><th class="r">Filled</th><th class="r">Closing</th>',r=>`<td>${fmtD(r.dt)}</td><td>${esc(siteName(r.site))}</td><td class="r">${fmtN(r.data.filled,1)}</td><td class="r ${r.data.closing<S.lowFuel?'low':''}">${fmtN(r.data.closing,1)}</td>`],
+    energy:['<th>Date</th><th>Site</th><th class="r">kWh</th><th class="r">kVAh</th>',r=>`<td>${fmtD(r.dt)}</td><td>${esc(siteName(r.site))}</td><td class="r">${fmtN(r.data.kwh)}</td><td class="r">${fmtN(r.data.kvah)}</td>`],
+    request:['<th>Date</th><th>Site</th><th class="r">DG Hrs</th><th class="r">Req (L)</th>',r=>`<td>${fmtD(r.dt)}</td><td>${esc(siteName(r.site))}</td><td class="r">${fmtN(r.data.calc?.dg)}</td><td class="r">${fmtN(r.data.requirement,1)}</td>`]
+  }[tab];
+  render(header('Dashboard','')+`<div class="wrap">
+    <div class="tiles">
+      <div class="tile" style="background:var(--bl)"><div class="ti" style="background:var(--b)">${I.site}</div><div><span>Total Sites</span><b>${S.sites.length}</b></div></div>
+      <div class="tile" style="background:var(--ol)"><div class="ti" style="background:var(--o)">${I.fuel}</div><div><span>Diesel Balance Total</span><b>${fmtN(totalFuel,1)} L</b></div></div>
+      <div class="tile" style="background:var(--gl)"><div class="ti" style="background:var(--g1)">${I.clock}</div><div><span>Latest DG Hours (sum)</span><b>${fmtN(totalDg,1)}</b></div></div>
+      <div class="tile" style="background:${low?'var(--rl)':'var(--gl)'}"><div class="ti" style="background:${low?'var(--r)':'var(--g1)'}">${I.alert}</div><div><span>Low fuel (&lt;${S.lowFuel} L)</span><b>${low} site${low==1?'':'s'}</b></div></div>
+    </div>
+    <div class="sec-t">Latest Readings by Site</div>
+    <div class="scroll"><table class="tbl"><tr><th>Site</th><th class="r">Fuel L</th><th class="r">DG HMR</th><th class="r">EB kWh</th><th class="r">kVAh</th><th>Last</th></tr>
+      ${L.map(x=>`<tr><td><a href="#/request/${x.s.id}" style="color:inherit">${esc(x.s.name)}</a></td><td class="r ${x.fuel&&x.fuel.v<S.lowFuel?'low':''}">${x.fuel?fmtN(x.fuel.v,1):'—'}</td><td class="r">${x.dg?fmtN(x.dg.v):'—'}</td><td class="r">${x.kwh?fmtN(x.kwh.v):'—'}</td><td class="r">${x.kvah?fmtN(x.kvah.v):'—'}</td><td>${x.last?fmtD(x.last.dt).slice(0,5):'—'}</td></tr>`).join('')}
+    </table></div>
+    <div class="sec-t">Latest Records</div>
+    <div class="tabs">${[['diesel','Diesel Filling'],['energy','Energy'],['request','Requests']].map(([k,l])=>`<button class="${k===tab?'on':''}" onclick="Dashboard('${k}')">${l}</button>`).join('')}</div>
+    <div class="scroll"><table class="tbl"><tr>${rows[0]}</tr>${recent.map(r=>`<tr>${rows[1](r)}</tr>`).join('')||'<tr><td colspan="4" class="empty">No records</td></tr>'}</table></div>
+    <div class="sec-t">Search Records</div>
+    <div class="filters"><select class="sel" id="qs"><option value="">All sites</option>${S.sites.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select><input class="sel" type="date" id="qd"></div>
+    <div class="btns"><button class="btn b-g" id="qgo">Search</button><button class="btn b-gr" onclick="exportExcel()">${I.xls}Excel</button></div>
+  </div>`,'dash');
+  $('#qgo').onclick=()=>{HF.site=$('#qs').value;HF.from=HF.to=$('#qd').value;HF.type='';location.hash='#/history'};
+}
+
+/* ================= HISTORY ================= */
+const HF={site:'',type:'',from:'',to:''};
+function filtered(){return live().filter(r=>(!HF.site||r.site===HF.site)&&(!HF.type||r.type===HF.type)&&(!HF.from||dayOf(r.dt)>=HF.from)&&(!HF.to||dayOf(r.dt)<=HF.to)).sort((a,b)=>b.dt<a.dt?-1:b.dt>a.dt?1:0)}
+function History(){
+  const list=filtered();
+  const right=r=>r.type==='diesel'?`${fmtN(r.data.closing,1)} L<br><small style="color:var(--m);font-weight:500">DG ${fmtN(r.data.dg)}</small>`:r.type==='energy'?`${fmtN(r.data.kwh)}<br><small style="color:var(--m);font-weight:500">kWh</small>`:`${fmtN(r.data.requirement,1)} L<br><small style="color:var(--m);font-weight:500">request</small>`;
+  render(header('History','')+`<div class="wrap">
+    <div class="filters">
+      <select class="sel" id="hs"><option value="">All sites</option>${S.sites.map(s=>`<option value="${s.id}" ${HF.site===s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select>
+      <select class="sel" id="ht"><option value="">All types</option>${[['diesel','Diesel Filling'],['energy','Energy Reading'],['request','Diesel Request']].map(([k,l])=>`<option value="${k}" ${HF.type===k?'selected':''}>${l}</option>`).join('')}</select>
+      <input class="sel" type="date" id="hf" value="${HF.from}" title="From"><input class="sel" type="date" id="hto" value="${HF.to}" title="To">
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><small style="color:var(--m)">${list.length} record(s)</small>
+    <button class="btn b-gr" style="flex:none;padding:8px 12px;font-size:13px" onclick="exportExcel(filtered())">${I.xls}Export Excel</button></div>
+    ${list.slice(0,300).map(r=>`<button class="rec" data-id="${r.id}"><span class="tg tg-${r.type}">${r.type.toUpperCase()}</span><span class="mid"><b>${esc(siteName(r.site))}</b><small>${fmtDT(r.dt)}${r.user?' · '+esc(r.user):''}${Object.values(r.src||{}).includes('EST')?' · has estimate':''}</small></span><span class="rt">${right(r)}</span></button>`).join('')||'<div class="empty">No records match the filter.</div>'}
+  </div>`,'history');
+  const re=()=>{HF.site=$('#hs').value;HF.type=$('#ht').value;HF.from=$('#hf').value;HF.to=$('#hto').value;History()};
+  ['#hs','#ht','#hf','#hto'].forEach(s=>$(s).onchange=re);
+  $$('.rec').forEach(b=>b.onclick=()=>recDetail(b.dataset.id));
+}
+function recDetail(id){
+  const r=RECS.find(x=>x.id===id);if(!r)return;
+  const s=k=>{const v=(r.src||{})[k];return v&&v!=='MANUAL'?` <span class="badge bd-${v}">${v==='EST'?'EST':v}</span>`:''};
+  let body='';
+  if(r.type==='diesel'){const d=r.data;body=`<span>EB kWh</span><b>${fmtN(d.kwh)}${s('kwh')}</b><span>DG HMR</span><b>${fmtN(d.dg)}${s('dg')}</b><span>PIU HMR</span><b>${fmtN(d.piu)}${s('piu')}</b><span>Prev DG / date</span><b>${d.prev?fmtN(d.prev.dg)+' · '+fmtD(d.prev.dt):'—'}</b><span>Opening</span><b>${fmtN(d.opening,1)} L</b><span>Filled</span><b>${fmtN(d.filled,1)} L</b><span>DG hrs diff</span><b>${fmtN(d.dgDiff)}</b><span>Consumption</span><b>${fmtN(d.consumption,1)} L</b><span>Closing</span><b>${fmtN(d.closing,1)} L</b>`}
+  else if(r.type==='energy'){const d=r.data;body=`<span>EB kWh</span><b>${fmtN(d.kwh)}${s('kwh')}</b><span>EB kVAh</span><b>${fmtN(d.kvah)}${s('kvah')}</b>`+OPS.map(o=>{const c=d.ops?.[o];if(!c||!CHS.some(x=>isNum(c[x]?.kw)||isNum(c[x]?.amp)))return '';return `<span style="grid-column:1/3;font-weight:800;color:var(--t);margin-top:6px">${o}</span>`+CHS.map(x=>`<span>CH${x} kW / Amp</span><b>${fmtN(c[x]?.kw)}${s(`${o}.${x}.kw`)} / ${fmtN(c[x]?.amp)}${s(`${o}.${x}.amp`)}</b>`).join('')}).join('')}
+  else body=`<span style="grid-column:1/3"></span></div><textarea class="msg" style="min-height:260px" readonly>${esc(r.data.message)}</textarea><div>`;
+  modal(`<h3>${esc(siteName(r.site))} · ${r.type}</h3><div class="dl"><span>Date</span><b>${fmtDT(r.dt)}</b><span>Entered by</span><b>${esc(r.user||'—')}</b>${body}</div>
+  <div class="btns">${r.type==='request'?`<button class="btn b-wa" id="rwa">${I.wa}Resend</button>`:''}<button class="btn b-r" id="del">Delete</button><button class="btn b-gr" onclick="closeModal()">Close</button></div>`);
+  $('#del').onclick=async()=>{if(!confirm('Delete this record? It will be removed from all devices.'))return;r.deleted=true;await putRec(r);closeModal();toast('Record deleted');History()};
+  if($('#rwa'))$('#rwa').onclick=()=>window.open(`https://wa.me/${(S.waNumber||'').replace(/\D/g,'')}?text=${encodeURIComponent(r.data.message)}`,'_blank');
+}
+
+/* ================= EXCEL EXPORT ================= */
+async function exportExcel(list){
+  list=list||live();
+  toast('Preparing Excel…',4000);
+  try{await loadScript(CDN.xlsx)}catch(e){return toast(e.message)}
+  const by=t=>list.filter(r=>r.type===t).sort((a,b)=>a.dt<b.dt?-1:1);
+  const dt=r=>[fmtD(r.dt),r.dt.slice(11,16)];
+  const wb=XLSX.utils.book_new();
+  const add=(name,head,rows)=>{const ws=XLSX.utils.aoa_to_sheet([head,...rows]);ws['!cols']=head.map(h=>({wch:Math.max(10,String(h).length+2)}));XLSX.utils.book_append_sheet(wb,ws,name)};
+  const n=v=>isNum(v)?+v:'';
+  add('Diesel Filling Records',['Record ID','Date','Time','Site','EB kWh','kWh Source','DG HMR','DG Source','PIU HMR','PIU Source','Prev Date','Prev kWh','Prev DG HMR','Prev PIU HMR','Opening (L)','Filled (L)','DG Hrs Diff','Consumption (L)','Closing (L)','Rate L/Hr','User','Phone'],
+    by('diesel').map(r=>{const d=r.data;return [r.id,...dt(r),siteName(r.site),n(d.kwh),r.src?.kwh||'',n(d.dg),r.src?.dg||'',n(d.piu),r.src?.piu||'',d.prev?fmtD(d.prev.dt):'',d.prevKwh?d.prevKwh.v:'',d.prev?n(d.prev.dg):'',d.prev?n(d.prev.piu):'',n(d.opening),n(d.filled),n(d.dgDiff),n(d.consumption),n(d.closing),n(d.rate),r.user||'',r.phone||'']}));
+  add('Energy Readings',['Record ID','Date','Time','Site','EB kWh','kWh Source','EB kVAh','kVAh Source','Prev kWh','Prev kVAh','kWh Diff','kVAh Diff','User'],
+    by('energy').map(r=>{const d=r.data;return [r.id,...dt(r),siteName(r.site),n(d.kwh),r.src?.kwh||'',n(d.kvah),r.src?.kvah||'',d.prevKwh?.v??'',d.prevKvah?.v??'',isNum(d.kwh)&&d.prevKwh?r2(d.kwh-d.prevKwh.v):'',isNum(d.kvah)&&d.prevKvah?r2(d.kvah-d.prevKvah.v):'',r.user||'']}));
+  OPS.forEach(o=>add(o+' Records',['Record ID','Date','Time','Site','Channel','kW','kW Source','Amp','Amp Source','User'],
+    by('energy').flatMap(r=>CHS.map(c=>{const v=r.data.ops?.[o]?.[c];if(!v||(!isNum(v.kw)&&!isNum(v.amp)))return null;return [r.id,...dt(r),siteName(r.site),'CH'+c,n(v.kw),r.src?.[`${o}.${c}.kw`]||'',n(v.amp),r.src?.[`${o}.${c}.amp`]||'',r.user||'']}).filter(Boolean))));
+  add('Diesel Request History',['Record ID','Date','Time','Site','Current Date','Previous Date','kWh Cons','kVAh Cons','DG Hrs','PIU Hrs','Fuel Diff (L)','Filled (L)','DG Consumption (L)','Requirement (L)','Message','User'],
+    by('request').map(r=>{const d=r.data,c=d.calc||{};return [r.id,...dt(r),siteName(r.site),fmtD(d.curDay),fmtD(d.prevDay),n(c.kwh),n(c.kvah),n(c.dg),n(c.piu),n(c.fuelDiff),n(d.filled),n(c.cons),n(c.req),d.message,r.user||'']}));
+  add('Site Master',['No','Site ID','Site Name','Operators','Channels per Operator','Opening Default (L)','Rate (L/Hr)'],S.sites.map((s,i)=>[i+1,s.id,s.name,OPS.join(', '),4,S.openingDefault,S.rate]));
+  add('Previous Readings',['Site','Fuel (L)','Fuel Date','DG HMR','DG Date','EB kWh','kWh Date','EB kVAh','kVAh Date'],latestBySite().map(x=>[x.s.name,x.fuel?.v??'',x.fuel?fmtD(x.fuel.dt):'',x.dg?.v??'',x.dg?fmtD(x.dg.dt):'',x.kwh?.v??'',x.kwh?fmtD(x.kwh.dt):'',x.kvah?.v??'',x.kvah?fmtD(x.kvah.dt):'']));
+  XLSX.writeFile(wb,`FieldRecord_${dayOf(nowLocal())}.xlsx`);
+}
+
+/* ================= SETTINGS ================= */
+function Settings(){
+  render(header('Settings','')+`<div class="wrap">
+    <div class="card"><h3>User</h3>
+      <div class="setf"><label>Your name (saved with every record)</label><input class="sel" id="s-user" value="${esc(S.user)}"></div>
+      <div class="setf"><label>Phone</label><input class="sel" id="s-phone" inputmode="tel" value="${esc(S.phone)}"></div>
+      <div class="setf"><label>Default WhatsApp number for requests (optional, with country code e.g. 919876543210)</label><input class="sel" id="s-wa" inputmode="tel" value="${esc(S.waNumber)}"></div></div>
+    <div class="card"><h3>Calculation</h3>
+      <div class="g2"><div class="setf"><label>Opening balance (L)</label><input class="sel" id="s-open" type="number" value="${S.openingDefault}"></div>
+      <div class="setf"><label>DG rate (L/Hr)</label><input class="sel" id="s-rate" type="number" step="0.1" value="${S.rate}"></div>
+      <div class="setf"><label>Low fuel alert (L)</label><input class="sel" id="s-low" type="number" value="${S.lowFuel}"></div></div></div>
+    <div class="card"><h3>Sites (${S.sites.length})</h3>
+      <div class="hint" style="margin:0 0 8px">One site per line. Rename freely — history stays attached to the same line. Add new sites at the end.</div>
+      <textarea class="sel" id="s-sites" rows="10" style="font-size:14px">${esc(S.sites.map(s=>s.name).join('\n'))}</textarea></div>
+    <button class="btn b-g" id="s-save">${I.save}Save Settings</button>
+    <div class="card mt"><h3>Cloud Sync (Firebase)</h3>
+      <div class="hint" style="margin:0 0 8px">Paste the <b>firebaseConfig</b> object from Firebase console → Project settings → Your apps → Web app. All phones using the same config share records.</div>
+      <textarea class="sel" id="s-fb" rows="7" style="font-size:12px;font-family:monospace" placeholder='{ "apiKey": "...", "authDomain": "...", "projectId": "...", "appId": "..." }'>${S.firebase?esc(JSON.stringify(S.firebase,null,1)):''}</textarea>
+      <div class="hint" id="s-fbst">${S.firebase?(Sync.ready?'Connected ✓':Sync.err?'Error: '+esc(Sync.err):'Connecting…'):'Not connected — records stay on this phone only.'}</div>
+      <div class="btns"><button class="btn b-g" id="s-fbsave">Connect</button><button class="btn b-gr" id="s-sync">${I.sync}Sync now</button></div>
+      ${S.firebase?`<div class="btns"><button class="btn b-gr" id="s-full" style="font-size:13px">Full resync</button><button class="btn b-r" id="s-fboff" style="font-size:13px">Disconnect</button></div>`:''}</div>
+    <div class="card"><h3>Data</h3>
+      <div class="btns"><button class="btn b-gr" onclick="exportExcel()">${I.xls}Excel (all)</button><button class="btn b-gr" id="s-json">Backup JSON</button></div>
+      <div class="btns"><button class="btn b-gr" id="s-imp">Restore JSON</button><button class="btn b-gr" id="s-sample">Load sample data</button></div>
+      <input type="file" id="s-impf" accept=".json" hidden>
+      <div class="hint mt">${live().length} records on this phone · ${PENDING.size} waiting to sync</div></div>
+    <div class="hint" style="text-align:center;margin:10px 0 20px">Field Record v1.0 · works offline</div>
+  </div>`,'settings');
+  $('#s-save').onclick=()=>{
+    S.user=$('#s-user').value.trim();S.phone=$('#s-phone').value.trim();S.waNumber=$('#s-wa').value.trim();
+    S.openingDefault=+$('#s-open').value||60;S.rate=+$('#s-rate').value||3.5;S.lowFuel=+$('#s-low').value||30;
+    const names=$('#s-sites').value.split('\n').map(x=>x.trim()).filter(Boolean);
+    if(names.length<S.sites.length&&!confirm(`You removed ${S.sites.length-names.length} site line(s) from the end. Their records are kept but hidden from lists. Continue?`))return;
+    S.sites=names.map((nm,i)=>({id:S.sites[i]?.id||('s'+Date.now().toString(36)+i),name:nm}));
+    saveS();toast('Settings saved');
+  };
+  $('#s-fbsave').onclick=async()=>{
+    let t=$('#s-fb').value.trim();if(!t)return toast('Paste the config first');
+    try{t=t.replace(/^[^{]*/,'').replace(/[^}]*$/,'');const cfg=Function('"use strict";return ('+t+')')();if(!cfg.apiKey||!cfg.projectId)throw 0;S.firebase=cfg;saveS();$('#s-fbst').textContent='Connecting…';await Sync.init();Settings()}
+    catch(e){toast('Invalid config – copy the { … } block exactly')}
+  };
+  $('#s-sync').onclick=async()=>{if(!S.firebase)return toast('Connect Firebase first');Sync.ready?await Sync.push():await Sync.init();toast(Sync.err?'Sync error: '+Sync.err:'Sync complete')};
+  if($('#s-full'))$('#s-full').onclick=async()=>{await Sync.fullResync();toast('Full resync started')};
+  if($('#s-fboff'))$('#s-fboff').onclick=()=>{if(!confirm('Disconnect cloud sync on this phone? Local records are kept.'))return;S.firebase=null;saveS();location.reload()};
+  $('#s-json').onclick=()=>{const b=new Blob([JSON.stringify({settings:S,records:RECS},null,1)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`FieldRecord_backup_${dayOf(nowLocal())}.json`;a.click()};
+  $('#s-imp').onclick=()=>$('#s-impf').click();
+  $('#s-impf').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const j=JSON.parse(await f.text());let n=0;for(const r of (j.records||[])){const loc=RECS.find(x=>x.id===r.id);if(!loc||(loc.updatedAt||0)<(r.updatedAt||0)){await DB.put(r);loc?Object.assign(loc,r):RECS.push(r);PENDING.add(r.id);n++}}savePending();Sync.push();toast(n+' records restored');Settings()}catch(err){toast('Invalid backup file')}};
+  $('#s-sample').onclick=async()=>{if(!confirm('Add sample test records for Palliyadi (26/09/2026 – 29/10/2026)?'))return;await loadSample();toast('Sample data added – try Diesel Request › Palliyadi')};
+}
+async function loadSample(){
+  const sid='s1',nm=siteName(sid);
+  const mk=(id,type,dt,data,src)=>({id,type,site:sid,siteName:nm,dt,user:'Sample',phone:'',createdAt:Date.now(),deleted:false,data,src});
+  const rate=3.5;
+  const recs=[
+    mk('sample-d1','diesel','2026-09-26T10:00',{kwh:71657,dg:1084,piu:970,opening:60,filled:14,dgDiff:0,consumption:0,closing:74,rate,prev:null},{kwh:'MANUAL',dg:'MANUAL',piu:'MANUAL'}),
+    mk('sample-e1','energy','2026-09-26T10:05',{kwh:71657,kvah:72196,ops:sampleOps(0)},{kwh:'MANUAL',kvah:'MANUAL'}),
+    mk('sample-d2','diesel','2026-10-14T11:00',{kwh:74950,dg:1095,piu:981,opening:74,filled:0,dgDiff:11,consumption:38.5,closing:35.5,rate,prev:{dt:'2026-09-26T10:00',dg:1084,piu:970,closing:74}},{kwh:'MANUAL',dg:'MANUAL',piu:'MANUAL'}),
+    mk('sample-d3','diesel','2026-10-29T09:30',{kwh:78031,dg:1107,piu:993,opening:35.5,filled:44.5,dgDiff:12,consumption:42,closing:38,rate,prev:{dt:'2026-10-14T11:00',dg:1095,piu:981,closing:35.5}},{kwh:'MANUAL',dg:'MANUAL',piu:'MANUAL'}),
+    mk('sample-e2','energy','2026-10-29T09:40',{kwh:78031,kvah:78624,ops:sampleOps(1)},{kwh:'MANUAL',kvah:'MANUAL'})
+  ];
+  for(const r of recs)await putRec(r);
+}
+function sampleOps(k){const base={Airtel:[12.5,22],Vodafone:[10,18],BSNL:[11.2,20],Jio:[9.8,17.5]};const o={};OPS.forEach(op=>{o[op]={};CHS.forEach(c=>{const [kw,a]=base[op];o[op][c]={kw:r2(kw-c*.4+k*.3),amp:r2(a-c*.6+k*.5)}})});return o}
+
+/* ================= BOOT ================= */
+(async function(){
+  try{await DB.open();RECS=await DB.all()}catch(e){alert('Storage unavailable: '+e.message)}
+  route();
+  Sync.init();
+  if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
+  if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();
+})();
+</script>
+</body>
+</html>
