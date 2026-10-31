@@ -8,7 +8,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="author" content="Manu Brahma">
+<meta name="copyright" content="© 2026 Manu Brahma. All rights reserved.">
+<meta name="description" content="Field Record – DG, energy reading and diesel request management. Crafted by Manu Brahma.">
 <title>Field Record</title>
 <style>
 :root{--g:#0b5d34;--g1:#14804a;--gl:#e8f6ee;--gb:#cbe8d6;--o:#ee7a16;--ol:#fff2e5;--b:#1f6fd1;--bl:#e9f2fd;--r:#d4291f;--rl:#fdecea;--y:#a86200;--yl:#fff6dc;--t:#18221d;--m:#68756e;--line:#e2e8e4;--bg:#eef3f0}
@@ -170,6 +173,11 @@ textarea.msg[readonly]{background:#f6f9f7}
 .loader{display:flex;align-items:center;gap:10px;justify-content:center;padding:20px;color:var(--m)}
 .loader .spin{border-color:var(--gb);border-top-color:var(--g1);width:22px;height:22px}
 .mt{margin-top:12px}
+.foot{text-align:center;padding:22px 18px 10px;color:var(--m);font-size:12px;line-height:1.6}
+.foot .by{font-size:13px;color:var(--t)}.foot .by b{color:var(--g)}
+.foot .hrt{color:#e5484d}
+.foot small{display:block;font-size:10.5px;opacity:.85;margin-top:4px}
+.applogo{width:84px;height:84px;border-radius:22px;box-shadow:0 6px 18px rgba(0,0,0,.25);display:block;margin:0 auto}
 </style>
 </head>
 <body>
@@ -181,6 +189,15 @@ textarea.msg[readonly]{background:#f6f9f7}
 'use strict';
 /* ================= CONFIG ================= */
 const DEFAULT_SITES=["Palliyadi","Kanchirankode","Azhagiyapandipuram","Kattuvilai","Marthandam relocation","North street","Kuzhiturai 2","Uttirancode","Pulierangi","Veerapuli Kulasekharam","Pechiparai","Thirparappu 5","Kulasekharam","Kalkulam","Jtel internet"];
+/* Built-in Firebase project – every phone syncs automatically */
+const BUILTIN_FIREBASE={
+  apiKey:"AIzaSyCA3MqiMXxlsZufSON5D16geNaaFN1OfSM",
+  authDomain:"field-record-67e0a.firebaseapp.com",
+  projectId:"field-record-67e0a",
+  storageBucket:"field-record-67e0a.firebasestorage.app",
+  messagingSenderId:"1034265852990",
+  appId:"1:1034265852990:web:7b09780c16fa8d0e48e56f"
+};
 const OPS=["Airtel","Vodafone","BSNL","Jio"];
 const CHS=[1,2,3,4];
 const CDN={
@@ -222,6 +239,8 @@ logo:'<svg viewBox="0 0 64 64" width="64" height="64" fill="none" stroke="#fff" 
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const YEAR=Math.max(2026,new Date().getFullYear());
+function footer(full){return `<div class="foot"><div class="by">Crafted with <span class="hrt">♥</span> by <b>Manu Brahma</b></div>© ${YEAR} Manu Brahma. All rights reserved.${full?`<small>This application, its design and source code are the intellectual property of Manu Brahma. Unauthorised copying, redistribution, resale or modification, in whole or in part, is strictly prohibited.</small>`:''}</div>`}
 const pad=n=>String(n).padStart(2,'0');
 function nowLocal(){const d=new Date();return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`}
 const dayOf=dt=>(dt||'').slice(0,10);
@@ -243,8 +262,9 @@ function closeModal(){$('#modal').innerHTML=''}
 const S=Object.assign({
   user:'',phone:'',waNumber:'',openingDefault:60,rate:3.5,lowFuel:30,
   sites:DEFAULT_SITES.map((n,i)=>({id:'s'+(i+1),name:n})),
-  firebase:null
+  firebase:BUILTIN_FIREBASE
 },JSON.parse(localStorage.getItem('fr_settings')||'{}'));
+if(!S.firebase&&!localStorage.getItem('fr_fb_off'))S.firebase=BUILTIN_FIREBASE;
 // add any new default sites missing from stored list (upgrade path)
 DEFAULT_SITES.forEach((n,i)=>{const id='s'+(i+1);if(!S.sites.find(s=>s.id===id))S.sites.push({id,name:n})});
 function saveS(){localStorage.setItem('fr_settings',JSON.stringify(S))}
@@ -304,19 +324,47 @@ function opHist(sid,op,ch,f){
 }
 
 /* ================= SYNC (Firebase Firestore) ================= */
-const Sync={ready:false,busy:false,err:'',unsub:null,
+/* signed-in Google account (cached so the app opens offline) */
+let ACCOUNT=JSON.parse(localStorage.getItem('fr_account')||'null');
+const Sync={ready:false,busy:false,err:'',unsub:null,loaded:false,
+async load(){
+  if(this.loaded)return;
+  await loadScript(CDN.fbApp);await loadScript(CDN.fbAuth);await loadScript(CDN.fbStore);
+  if(!firebase.apps.length)firebase.initializeApp(S.firebase);
+  this.db=firebase.firestore();this.loaded=true;
+},
 async init(){
   if(!S.firebase){status();return}
   try{
-    await loadScript(CDN.fbApp);await loadScript(CDN.fbAuth);await loadScript(CDN.fbStore);
-    if(!firebase.apps.length)firebase.initializeApp(S.firebase);
-    await firebase.auth().signInAnonymously();
-    this.db=firebase.firestore();
-    this.ready=true;this.err='';
-    this.listen();await this.push();
+    await this.load();
+    if(this.watching)return;this.watching=true;
+    firebase.auth().onAuthStateChanged(async u=>{
+      if(u){
+        ACCOUNT={name:u.displayName||'',email:u.email||'',photo:u.photoURL||''};
+        localStorage.setItem('fr_account',JSON.stringify(ACCOUNT));
+        if(!S.user){S.user=ACCOUNT.name;saveS()}
+        this.ready=true;this.err='';this.listen();await this.push();
+        if(location.hash==='#/login')location.hash='#/';
+      }else{
+        this.ready=false;if(this.unsub){this.unsub();this.unsub=null}
+        if(ACCOUNT){ACCOUNT=null;localStorage.removeItem('fr_account')}
+        route();
+      }
+      status();
+    });
   }catch(e){this.err=e.message||String(e);console.warn(e)}
   status();
 },
+async login(){
+  await this.load();
+  const p=new firebase.auth.GoogleAuthProvider();p.setCustomParameters({prompt:'select_account'});
+  try{await firebase.auth().signInWithPopup(p)}
+  catch(e){
+    if(['auth/popup-blocked','auth/operation-not-supported-in-this-environment','auth/cancelled-popup-request'].includes(e.code))return firebase.auth().signInWithRedirect(p);
+    throw e;
+  }
+},
+async logout(){if(this.loaded)await firebase.auth().signOut();ACCOUNT=null;localStorage.removeItem('fr_account');location.hash='#/login';route()},
 listen(){
   if(this.unsub)this.unsub();
   const since=+localStorage.getItem('fr_lastPull')||0;
@@ -330,7 +378,7 @@ listen(){
     }
     localStorage.setItem('fr_lastPull',max);
     if(changed&&!/^#\/(diesel|energy|request)\/|^#\/msg/.test(location.hash))route();
-  },e=>{this.err=e.message;status()});
+  },e=>{this.err=/permission/i.test(e.message)?'This Gmail ID is not allowed. Ask the admin to add it.':e.message;status();if(location.hash==='#/settings')Settings()});
 },
 async push(){
   if(!this.ready||!navigator.onLine||this.busy||!PENDING.size){status();return}
@@ -357,6 +405,7 @@ function status(){
   if(Sync.busy)h='<div class="spin"></div>Syncing';
   else if(!navigator.onLine)h=`<span class="dot off"></span>Offline${PENDING.size?' · '+PENDING.size:''}`;
   else if(!S.firebase)h='<span class="dot wait"></span>Local only';
+  else if(!ACCOUNT)h='<span class="dot wait"></span>Not signed in';
   else if(Sync.err)h='<span class="dot off"></span>Sync error';
   else if(PENDING.size)h=`<span class="dot wait"></span>${PENDING.size} pending`;
   else h='<span class="dot"></span>Synced';
@@ -379,7 +428,8 @@ function route(){
   closeModal();
   const p=(location.hash||'#/').slice(2).split('/');
   const [a,b]=p;
-  if(!a)return Home();
+  if(S.firebase&&!ACCOUNT)return LoginPage();
+  if(!a||a==='login')return Home();
   if(a==='diesel')return b?DieselPage(b):SiteList('diesel');
   if(a==='energy')return b?EnergyPage(b):SiteList('energy');
   if(a==='request')return b?RequestPage(b):SiteList('request');
@@ -391,6 +441,31 @@ function route(){
 }
 window.addEventListener('hashchange',route);
 
+/* ================= LOGIN ================= */
+function LoginPage(){
+  $('#app').innerHTML=`<div class="hero" style="padding:60px 16px 70px"><img class="applogo" src="icon-192.png" alt=""><h1>FIELD RECORD</h1><p>DG • Energy • Diesel Management</p></div>
+  <div class="wrap" style="margin-top:-28px;position:relative">
+    <div class="card" style="background:#fff;box-shadow:0 4px 18px rgba(0,0,0,.08);text-align:center;padding:22px 16px">
+      <h3 style="font-size:18px;margin-bottom:6px">Sign in to continue</h3>
+      <div class="hint" style="margin-bottom:18px">Use your Gmail ID. Records are saved with your name and shared with your team.</div>
+      <button class="btn" id="gbtn" style="width:100%;background:#fff;border:1.5px solid #dadce0;color:#3c4043">
+        <svg viewBox="0 0 48 48" width="22" height="22"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
+        Sign in with Google</button>
+      <div class="err" id="lerr" style="margin-top:12px"></div>
+      ${!navigator.onLine?'<div class="note mt">You are offline. Connect to the internet for the first sign-in. After that the app works offline.</div>':''}
+    </div>
+    <div class="hint" style="text-align:center;margin-top:14px">Authorised users only. Access is logged with your Google account.</div>
+  </div>${footer(true)}`;
+  $('#gbtn').onclick=async()=>{
+    $('#lerr').textContent='';$('#gbtn').disabled=true;$('#gbtn').lastChild.textContent=' Signing in…';
+    try{await Sync.login()}catch(e){
+      const m={'auth/unauthorized-domain':'This website address is not authorised in Firebase (Authentication → Settings → Authorised domains).','auth/popup-closed-by-user':'Sign-in window was closed. Try again.','auth/network-request-failed':'No internet connection.','auth/operation-not-allowed':'Google sign-in is not enabled in Firebase yet.'}[e.code];
+      $('#lerr').textContent=m||e.message;
+    }
+    if($('#gbtn')){$('#gbtn').disabled=false;$('#gbtn').lastChild.textContent=' Sign in with Google'}
+  };
+}
+
 /* ================= HOME ================= */
 function Home(){
   const today=dayOf(nowLocal());
@@ -398,7 +473,7 @@ function Home(){
   const tE=live().filter(r=>r.type==='energy'&&dayOf(r.dt)===today).length;
   render(`
   <div class="hero"><div class="top"><div class="chip" id="sync" onclick="location.hash='#/settings'"></div></div>
-    ${I.logo}<h1>FIELD RECORD</h1><p>DG • Energy • Diesel Management</p></div>
+    <img class="applogo" src="icon-192.png" alt=""><h1>FIELD RECORD</h1><p>DG • Energy • Diesel Management</p></div>
   <div class="menu">
     <button class="mcard m-g" onclick="location.hash='#/diesel'"><div class="ic">${I.fuel}</div><div><b>Diesel Filling</b><span>Record diesel filling and DG hours</span></div><span class="ar">${I.chev}</span></button>
     <button class="mcard m-b" onclick="location.hash='#/energy'"><div class="ic">${I.meter}</div><div><b>Energy Reading</b><span>EB meter and operator readings</span></div><span class="ar">${I.chev}</span></button>
@@ -406,6 +481,7 @@ function Home(){
   </div>
   <div class="qs"><div><b>${S.sites.length}</b><span>Sites</span></div><div><b>${tD}</b><span>Diesel today</span></div><div><b>${tE}</b><span>Energy today</span></div></div>
   ${!S.user?`<div class="wrap" style="padding-top:0"><div class="note">Tip: set your name in <a href="#/settings">Settings</a> so records show who entered them.</div></div>`:''}
+  ${footer(false)}
   `,'home');
 }
 
@@ -566,7 +642,7 @@ function DieselPage(sid){
     if($$('.inp.bad').length&&!confirm('Some readings are lower than the previous reading (meter reset/replaced?). Save anyway?'))return;
     const day=dayOf(F.dt);const dup=sameDayRec(sid,'diesel',day);
     if(dup&&!confirm(`A diesel record for ${site.name} on ${fmtD(day)} already exists.\nOK = replace it with this one\nCancel = do not save`))return;
-    const rec={id:dup?dup.id:uid(),type:'diesel',site:sid,siteName:site.name,dt:F.dt,user:S.user,phone:S.phone,createdAt:dup?dup.createdAt:Date.now(),deleted:false,
+    const rec={id:dup?dup.id:uid(),type:'diesel',site:sid,siteName:site.name,dt:F.dt,user:S.user,phone:S.phone,email:ACCOUNT?ACCOUNT.email:'',createdAt:dup?dup.createdAt:Date.now(),deleted:false,
       data:{kwh:isNum(F.kwh)?+F.kwh:'',dg:+F.dg,piu:isNum(F.piu)?+F.piu:'',opening:+F.opening||0,filled:+F.filled||0,dgDiff:c.dgDiff,consumption:c.cons,closing:c.closing,rate:S.rate,
         prev:P.prev?{dt:P.prev.dt,dg:P.prev.data.dg,piu:P.prev.data.piu,closing:P.prev.data.closing}:null,prevKwh:P.kwhP?{dt:P.kwhP.dt,v:P.kwhP.v}:null},
       src:{kwh:isNum(F.kwh)?F.src.kwh||'MANUAL':'',dg:F.src.dg||'MANUAL',piu:isNum(F.piu)?F.src.piu||'MANUAL':''}};
@@ -637,7 +713,7 @@ function EnergyPage(sid){
     const ops={};const src={};
     OPS.forEach(o=>{ops[o]={};CHS.forEach(c=>{const v=F.ops[o][c];ops[o][c]={kw:isNum(v.kw)?+v.kw:'',amp:isNum(v.amp)?+v.amp:''};['kw','amp'].forEach(f=>{if(isNum(v[f]))src[`${o}.${c}.${f}`]=F.src[`${o}.${c}.${f}`]||'MANUAL'})})});
     if(isNum(F.kwh))src.kwh=F.src.kwh||'MANUAL';if(isNum(F.kvah))src.kvah=F.src.kvah||'MANUAL';
-    const rec={id:dup?dup.id:uid(),type:'energy',site:sid,siteName:site.name,dt:F.dt,user:S.user,phone:S.phone,createdAt:dup?dup.createdAt:Date.now(),deleted:false,
+    const rec={id:dup?dup.id:uid(),type:'energy',site:sid,siteName:site.name,dt:F.dt,user:S.user,phone:S.phone,email:ACCOUNT?ACCOUNT.email:'',createdAt:dup?dup.createdAt:Date.now(),deleted:false,
       data:{kwh:isNum(F.kwh)?+F.kwh:'',kvah:isNum(F.kvah)?+F.kvah:'',ops,prevKwh:hints.k?{dt:hints.k.dt,v:hints.k.v}:null,prevKvah:hints.v?{dt:hints.v.dt,v:hints.v.v}:null},src};
     await putRec(rec);
     modal(`<div class="okbig"><div class="c">${I.ok}</div><b>Energy Reading Saved!</b></div>
@@ -726,7 +802,7 @@ function RequestPage(sid){
   $('#r-filled').oninput=e=>{R.filled=+e.target.value||0;upd()};
   $('#gen').onclick=async()=>{
     const C=upd();const text=reqMessage(sid,R,C);
-    const rec={id:uid(),type:'request',site:sid,siteName:site.name,dt:nowLocal(),user:S.user,phone:S.phone,createdAt:Date.now(),deleted:false,
+    const rec={id:uid(),type:'request',site:sid,siteName:site.name,dt:nowLocal(),user:S.user,phone:S.phone,email:ACCOUNT?ACCOUNT.email:'',createdAt:Date.now(),deleted:false,
       data:{curDay:R.curDay,prevDay:R.prevDay,cur:R.cur,prev:R.prev,filled:R.filled,calc:C,requirement:C.req,message:text},src:{}};
     await putRec(rec);
     MSG={sid,text,recId:rec.id};location.hash='#/msg';
@@ -826,8 +902,8 @@ async function exportExcel(list){
   const wb=XLSX.utils.book_new();
   const add=(name,head,rows)=>{const ws=XLSX.utils.aoa_to_sheet([head,...rows]);ws['!cols']=head.map(h=>({wch:Math.max(10,String(h).length+2)}));XLSX.utils.book_append_sheet(wb,ws,name)};
   const n=v=>isNum(v)?+v:'';
-  add('Diesel Filling Records',['Record ID','Date','Time','Site','EB kWh','kWh Source','DG HMR','DG Source','PIU HMR','PIU Source','Prev Date','Prev kWh','Prev DG HMR','Prev PIU HMR','Opening (L)','Filled (L)','DG Hrs Diff','Consumption (L)','Closing (L)','Rate L/Hr','User','Phone'],
-    by('diesel').map(r=>{const d=r.data;return [r.id,...dt(r),siteName(r.site),n(d.kwh),r.src?.kwh||'',n(d.dg),r.src?.dg||'',n(d.piu),r.src?.piu||'',d.prev?fmtD(d.prev.dt):'',d.prevKwh?d.prevKwh.v:'',d.prev?n(d.prev.dg):'',d.prev?n(d.prev.piu):'',n(d.opening),n(d.filled),n(d.dgDiff),n(d.consumption),n(d.closing),n(d.rate),r.user||'',r.phone||'']}));
+  add('Diesel Filling Records',['Record ID','Date','Time','Site','EB kWh','kWh Source','DG HMR','DG Source','PIU HMR','PIU Source','Prev Date','Prev kWh','Prev DG HMR','Prev PIU HMR','Opening (L)','Filled (L)','DG Hrs Diff','Consumption (L)','Closing (L)','Rate L/Hr','User','Phone','Email'],
+    by('diesel').map(r=>{const d=r.data;return [r.id,...dt(r),siteName(r.site),n(d.kwh),r.src?.kwh||'',n(d.dg),r.src?.dg||'',n(d.piu),r.src?.piu||'',d.prev?fmtD(d.prev.dt):'',d.prevKwh?d.prevKwh.v:'',d.prev?n(d.prev.dg):'',d.prev?n(d.prev.piu):'',n(d.opening),n(d.filled),n(d.dgDiff),n(d.consumption),n(d.closing),n(d.rate),r.user||'',r.phone||'',r.email||'']}));
   add('Energy Readings',['Record ID','Date','Time','Site','EB kWh','kWh Source','EB kVAh','kVAh Source','Prev kWh','Prev kVAh','kWh Diff','kVAh Diff','User'],
     by('energy').map(r=>{const d=r.data;return [r.id,...dt(r),siteName(r.site),n(d.kwh),r.src?.kwh||'',n(d.kvah),r.src?.kvah||'',d.prevKwh?.v??'',d.prevKvah?.v??'',isNum(d.kwh)&&d.prevKwh?r2(d.kwh-d.prevKwh.v):'',isNum(d.kvah)&&d.prevKvah?r2(d.kvah-d.prevKvah.v):'',r.user||'']}));
   OPS.forEach(o=>add(o+' Records',['Record ID','Date','Time','Site','Channel','kW','kW Source','Amp','Amp Source','User'],
@@ -842,6 +918,7 @@ async function exportExcel(list){
 /* ================= SETTINGS ================= */
 function Settings(){
   render(header('Settings','')+`<div class="wrap">
+    ${S.firebase?`<div class="card" style="display:flex;align-items:center;gap:12px">${ACCOUNT&&ACCOUNT.photo?`<img src="${esc(ACCOUNT.photo)}" referrerpolicy="no-referrer" style="width:44px;height:44px;border-radius:50%">`:''}<div style="flex:1;min-width:0"><b>${esc(ACCOUNT?ACCOUNT.name:'Not signed in')}</b><div class="hint" style="margin:0;overflow:hidden;text-overflow:ellipsis">${esc(ACCOUNT?ACCOUNT.email:'')}</div></div><button class="btn b-r" style="flex:none;padding:10px 14px;font-size:14px" id="s-out">Sign out</button></div>`:''}
     <div class="card"><h3>User</h3>
       <div class="setf"><label>Your name (saved with every record)</label><input class="sel" id="s-user" value="${esc(S.user)}"></div>
       <div class="setf"><label>Phone</label><input class="sel" id="s-phone" inputmode="tel" value="${esc(S.phone)}"></div>
@@ -865,8 +942,12 @@ function Settings(){
       <div class="btns"><button class="btn b-gr" id="s-imp">Restore JSON</button><button class="btn b-gr" id="s-sample">Load sample data</button></div>
       <input type="file" id="s-impf" accept=".json" hidden>
       <div class="hint mt">${live().length} records on this phone · ${PENDING.size} waiting to sync</div></div>
-    <div class="hint" style="text-align:center;margin:10px 0 20px">Field Record v1.0 · works offline</div>
+    <div class="card"><h3>About</h3>
+      <div class="dl" style="margin:0"><span>App</span><b>Field Record</b><span>Version</span><b>1.1</b><span>Developer</span><b>Manu Brahma</b></div>
+      <div class="note mt" style="margin-bottom:0"><b>Disclaimer:</b> Diesel consumption, requirement and estimated readings are calculated values. Always verify against actual meter and tank readings before submitting a diesel request. Values marked ESTIMATE / (Est.) are not actual meter readings.</div></div>
+    ${footer(true)}
   </div>`,'settings');
+  if($('#s-out'))$('#s-out').onclick=()=>{if(PENDING.size&&!confirm(PENDING.size+' record(s) not yet uploaded. Sign out anyway? (They stay on this phone.)'))return;if(confirm('Sign out of Field Record?'))Sync.logout()};
   $('#s-save').onclick=()=>{
     S.user=$('#s-user').value.trim();S.phone=$('#s-phone').value.trim();S.waNumber=$('#s-wa').value.trim();
     S.openingDefault=+$('#s-open').value||60;S.rate=+$('#s-rate').value||3.5;S.lowFuel=+$('#s-low').value||30;
@@ -877,12 +958,12 @@ function Settings(){
   };
   $('#s-fbsave').onclick=async()=>{
     let t=$('#s-fb').value.trim();if(!t)return toast('Paste the config first');
-    try{t=t.replace(/^[^{]*/,'').replace(/[^}]*$/,'');const cfg=Function('"use strict";return ('+t+')')();if(!cfg.apiKey||!cfg.projectId)throw 0;S.firebase=cfg;saveS();$('#s-fbst').textContent='Connecting…';await Sync.init();Settings()}
+    try{const m=t.match(/firebaseConfig\s*=\s*(\{[\s\S]*?\})/);if(m)t=m[1];t=t.replace(/^[^{]*/,'').replace(/[^}]*$/,'');const cfg=Function('"use strict";return ('+t+')')();if(!cfg.apiKey||!cfg.projectId)throw 0;S.firebase=cfg;saveS();localStorage.removeItem('fr_fb_off');$('#s-fbst').textContent='Connecting…';await Sync.init();Settings()}
     catch(e){toast('Invalid config – copy the { … } block exactly')}
   };
   $('#s-sync').onclick=async()=>{if(!S.firebase)return toast('Connect Firebase first');Sync.ready?await Sync.push():await Sync.init();toast(Sync.err?'Sync error: '+Sync.err:'Sync complete')};
   if($('#s-full'))$('#s-full').onclick=async()=>{await Sync.fullResync();toast('Full resync started')};
-  if($('#s-fboff'))$('#s-fboff').onclick=()=>{if(!confirm('Disconnect cloud sync on this phone? Local records are kept.'))return;S.firebase=null;saveS();location.reload()};
+  if($('#s-fboff'))$('#s-fboff').onclick=()=>{if(!confirm('Disconnect cloud sync on this phone? Local records are kept.'))return;S.firebase=null;saveS();localStorage.setItem('fr_fb_off','1');location.reload()};
   $('#s-json').onclick=()=>{const b=new Blob([JSON.stringify({settings:S,records:RECS},null,1)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`FieldRecord_backup_${dayOf(nowLocal())}.json`;a.click()};
   $('#s-imp').onclick=()=>$('#s-impf').click();
   $('#s-impf').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const j=JSON.parse(await f.text());let n=0;for(const r of (j.records||[])){const loc=RECS.find(x=>x.id===r.id);if(!loc||(loc.updatedAt||0)<(r.updatedAt||0)){await DB.put(r);loc?Object.assign(loc,r):RECS.push(r);PENDING.add(r.id);n++}}savePending();Sync.push();toast(n+' records restored');Settings()}catch(err){toast('Invalid backup file')}};

@@ -22,27 +22,26 @@ Field Record is an installable phone app (PWA) for diesel filling, energy readin
 
 > The app works fully on one phone without Firebase. Do Step 3 only if records must be shared across phones or backed up to the cloud.
 
-## Step 3 – Firebase cloud sync (free Spark plan is enough)
-1. Go to <https://console.firebase.google.com> → **Add project** (Google Analytics not needed).
-2. **Build → Authentication → Get started → Sign-in method → Anonymous → Enable.**
-3. **Build → Firestore Database → Create database** → choose region `asia-south1 (Mumbai)` → **Production mode**.
-4. Open the **Rules** tab, paste this, then **Publish**:
+## Step 3 – Firebase (Google sign-in + cloud sync)
+The Firebase project `field-record-67e0a` is already built into the app.
+1. **Authentication → Get started → Sign-in method → Google → Enable**, pick a support email, **Save**.
+2. **Authentication → Settings → Authorised domains → Add domain** → `YOUR-USERNAME.github.io`
+3. **Databases & Storage → Firestore → Create database** → Standard edition → `asia-south1 (Mumbai)` → **Locked mode** → Create.
+4. **Firestore → Rules** → paste and **Publish** (put the allowed Gmail IDs in the list, lowercase):
    ```
    rules_version = '2';
    service cloud.firestore {
      match /databases/{database}/documents {
        match /records/{id} {
-         allow read, write: if request.auth != null;
+         allow read, write: if request.auth != null
+           && request.auth.token.email in ['brother@gmail.com', 'colleague@gmail.com'];
        }
      }
    }
    ```
-5. **Project settings (⚙) → General → Your apps → Web (`</>`)** → register app (no hosting) → copy the `firebaseConfig = { ... }` block.
-6. In the app: **Settings → Cloud Sync** → paste the `{ ... }` block → **Connect**. Do the same on every phone that should share records.
+5. Open the app → **Sign in with Google**. To allow another person later, add their Gmail to the list and Publish again.
 
-The chip in the top bar shows the status: *Synced*, *N pending*, *Offline* or *Local only*. Records entered offline are saved on the phone and upload automatically when internet returns.
-
-Usage is tiny (one write per saved record), so it stays far inside the free daily limit.
+The first sign-in needs internet; after that the app works offline and syncs when the network returns.
 
 ## Using the app
 - **Diesel Filling**: pick a site, then enter EB kWh, DG HMR, PIU HMR and diesel filled. Opening balance is taken from the last closing balance (60 L for the very first record). Closing = Opening + Filled − (DG hours × 3.5). A negative result shows a red warning and needs confirmation.
