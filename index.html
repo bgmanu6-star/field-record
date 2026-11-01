@@ -14,7 +14,7 @@
 <meta name="description" content="Field Record – DG, energy reading and diesel request management. Crafted by Manu Brahma.">
 <title>Field Record</title>
 <style>
-:root{--g:#0b5d34;--g1:#14804a;--gl:#e8f6ee;--gb:#cbe8d6;--o:#ee7a16;--ol:#fff2e5;--b:#1f6fd1;--bl:#e9f2fd;--r:#d4291f;--rl:#fdecea;--y:#a86200;--yl:#fff6dc;--t:#18221d;--m:#68756e;--line:#e2e8e4;--bg:#eef3f0}
+:root{--tt:#0e7c7b;--tl:#e1f3f2;--g:#0b5d34;--g1:#14804a;--gl:#e8f6ee;--gb:#cbe8d6;--o:#ee7a16;--ol:#fff2e5;--b:#1f6fd1;--bl:#e9f2fd;--r:#d4291f;--rl:#fdecea;--y:#a86200;--yl:#fff6dc;--t:#18221d;--m:#68756e;--line:#e2e8e4;--bg:#eef3f0}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0}
 body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans",sans-serif;background:var(--bg);color:var(--t);font-size:15px}
@@ -45,6 +45,8 @@ input,select,textarea{font:inherit;color:inherit}
 .mcard .ar{margin-left:auto;width:22px;height:22px;flex:none}
 .m-g{background:var(--gl)}.m-g .ic{background:var(--g1)}.m-g b,.m-g .ar{color:var(--g)}
 .m-b{background:var(--bl)}.m-b .ic{background:var(--b)}.m-b b,.m-b .ar{color:var(--b)}
+.m-t{background:var(--tl)}.m-t .ic{background:var(--tt)}.m-t b,.m-t .ar{color:var(--tt)}
+.b-t{background:var(--tt);color:#fff}.acc-t .num{background:var(--tt)}.tg-stock{background:var(--tl);color:var(--tt)}
 .m-o{background:var(--ol)}.m-o .ic{background:var(--o)}.m-o b,.m-o .ar{color:#b65400}
 .qs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:14px}
 .qs div{background:var(--bg);border-radius:12px;padding:10px;text-align:center}
@@ -198,7 +200,8 @@ const BUILTIN_FIREBASE={
   messagingSenderId:"1034265852990",
   appId:"1:1034265852990:web:7b09780c16fa8d0e48e56f"
 };
-const OPS=["Airtel","Vodafone","BSNL","Jio"];
+const DEFAULT_OPS=["Airtel","Vodafone","BSNL","Jio"];
+const OPS=DEFAULT_OPS.slice(); /* editable list, loaded from settings */
 const CHS=[1,2,3,4];
 const CDN={
   xlsx:"https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js",
@@ -232,6 +235,8 @@ site:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a7 7 0 0 0-7 7c
 bolt:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h8l-1 8 10-12h-8z"/></svg>',
 clock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
 alert:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/></svg>',
+barrel:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="7" ry="2.5"/><path d="M5 5v14c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V5"/><path d="M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/></svg>',
+swap:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/></svg>',
 logo:'<svg viewBox="0 0 64 64" width="64" height="64" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="10" width="36" height="46" rx="5"/><path d="M24 10V6h16v4"/><path d="M22 26h20M22 34h20M22 42h12"/><path d="M44 40c4 0 6 3 6 6s-3 6-6 6"/></svg>'
 };
 
@@ -267,6 +272,9 @@ const S=Object.assign({
 if(!S.firebase&&!localStorage.getItem('fr_fb_off'))S.firebase=BUILTIN_FIREBASE;
 // add any new default sites missing from stored list (upgrade path)
 if(!S.sitesAt)DEFAULT_SITES.forEach((n,i)=>{const id='s'+(i+1);if(!S.sites.find(s=>s.id===id))S.sites.push({id,name:n})});
+if(Array.isArray(S.operators)&&S.operators.length)OPS.splice(0,OPS.length,...S.operators);
+if(!isNum(S.dieselPrice))S.dieselPrice=101.80;
+if(!Array.isArray(S.priceHistory))S.priceHistory=[{price:101.80,from:'2026-01-01',user:''}];
 function saveS(){localStorage.setItem('fr_settings',JSON.stringify(S))}
 saveS();
 const siteById=id=>S.sites.find(s=>s.id===id);
@@ -279,10 +287,17 @@ function siteCfg(sid){const s=siteById(sid)||{};const n=(v,d)=>isNum(v)?+v:d;
 function applySiteConfig(rec){
   if(!rec||rec.type!=='config'||!Array.isArray(rec.data&&rec.data.sites))return false;
   if((S.sitesAt||0)>=(rec.updatedAt||0))return false;
-  S.sites=rec.data.sites;S.sitesAt=rec.updatedAt||Date.now();saveS();return true;
+  S.sites=rec.data.sites;S.sitesAt=rec.updatedAt||Date.now();
+  if(Array.isArray(rec.data.operators)&&rec.data.operators.length){S.operators=rec.data.operators;OPS.splice(0,OPS.length,...rec.data.operators)}
+  if(isNum(rec.data.dieselPrice))S.dieselPrice=+rec.data.dieselPrice;
+  if(Array.isArray(rec.data.priceHistory))S.priceHistory=rec.data.priceHistory;
+  saveS();return true;
 }
+/* before adding a new operator for one site, pin the current list on sites that use "all operators" */
+function freezeSiteOps(){S.sites.forEach(st=>{if(!Array.isArray(st.ops)||!st.ops.length)st.ops=OPS.slice()})}
+const cleanName=t=>String(t||'').trim().replace(/[.#$\[\]\/<>"'`\\]/g,'').slice(0,30);
 async function saveSiteConfig(){
-  const rec={id:'config-sites',type:'config',site:'',siteName:'',dt:nowLocal(),user:S.user,createdAt:Date.now(),deleted:false,data:{sites:JSON.parse(JSON.stringify(S.sites))},src:{}};
+  const rec={id:'config-sites',type:'config',site:'',siteName:'',dt:nowLocal(),user:S.user,createdAt:Date.now(),deleted:false,data:{sites:JSON.parse(JSON.stringify(S.sites)),operators:OPS.slice(),dieselPrice:S.dieselPrice,priceHistory:S.priceHistory},src:{}};
   await putRec(rec);S.sitesAt=rec.updatedAt;saveS();
 }
 const siteName=id=>(siteById(id)||{}).name||id;
@@ -302,7 +317,7 @@ async function putRec(rec,{fromRemote=false}={}){
   await DB.put(rec);
   const i=RECS.findIndex(r=>r.id===rec.id);if(i>=0)RECS[i]=rec;else RECS.push(rec);
   if(!fromRemote){Sync.push()}
-  else if(rec.type==='config'&&applySiteConfig(rec)&&!/^#\/(diesel|energy|request)\/|^#\/msg/.test(location.hash))setTimeout(route,0);
+  else if(rec.type==='config'&&applySiteConfig(rec)&&!/^#\/(diesel|energy|request|stock)\/|^#\/msg/.test(location.hash))setTimeout(route,0);
   status();
 }
 
@@ -315,7 +330,7 @@ function fval(r,f){
 /* history of a field across diesel+energy records of a site */
 function fieldHist(sid,f,{actualOnly=false}={}){
   const out=[];
-  recsOf(sid).forEach(r=>{if(r.type==='request')return;const v=fval(r,f);if(v===undefined)return;const src=f==='fuel'?'CALC':(r.src||{})[f]||'MANUAL';if(actualOnly&&src==='EST')return;out.push({dt:r.dt,day:dayOf(r.dt),v,src,type:r.type})});
+  recsOf(sid).forEach(r=>{if(r.type!=='diesel'&&r.type!=='energy')return;const v=fval(r,f);if(v===undefined)return;const src=f==='fuel'?'CALC':(r.src||{})[f]||'MANUAL';if(actualOnly&&src==='EST')return;out.push({dt:r.dt,day:dayOf(r.dt),v,src,type:r.type})});
   return out;
 }
 function lastBefore(hist,day,inclusive){for(let i=hist.length-1;i>=0;i--){if(inclusive?hist[i].day<=day:hist[i].day<day)return hist[i]}return null}
@@ -361,7 +376,7 @@ async init(){
         localStorage.setItem('fr_account',JSON.stringify(ACCOUNT));
         if(!S.user){S.user=ACCOUNT.name;saveS()}
         this.ready=true;this.err='';this.needLogin=false;this.listen();await this.push();
-        if(location.hash==='#/login')location.hash='#/';else if(!/^#\/(diesel|energy|request)\/|^#\/msg/.test(location.hash))route();
+        if(location.hash==='#/login')location.hash='#/';else if(!/^#\/(diesel|energy|request|stock)\/|^#\/msg/.test(location.hash))route();
       }else{
         this.ready=false;if(this.unsub){this.unsub();this.unsub=null}
         // keep the cached account so the app opens normally; just flag that sync needs a sign-in
@@ -390,7 +405,7 @@ listen(){
       if(!loc||(loc.updatedAt||0)<(d.updatedAt||0)){await putRec(d,{fromRemote:true});changed=true}
     }
     localStorage.setItem('fr_lastPull',max);
-    if(changed&&!/^#\/(diesel|energy|request)\/|^#\/msg/.test(location.hash))route();
+    if(changed&&!/^#\/(diesel|energy|request|stock)\/|^#\/msg/.test(location.hash))route();
   },e=>{this.err=/permission/i.test(e.message)?'This Gmail ID is not allowed. Ask the admin to add it.':e.message;status();if(location.hash==='#/settings')Settings()});
 },
 async push(){
@@ -449,6 +464,8 @@ function route(){
   if(a==='energy')return b?EnergyPage(b):SiteList('energy');
   if(a==='request')return b?RequestPage(b):SiteList('request');
   if(a==='msg')return MsgPage();
+  if(a==='stock')return b?StockSite(b):StockHome();
+  if(a==='stockreport')return StockReport();
   if(a==='dash')return Dashboard();
   if(a==='history')return History();
   if(a==='settings')return Settings();
@@ -511,6 +528,7 @@ function Home(){
     <button class="mcard m-g" onclick="location.hash='#/diesel'"><div class="ic">${I.fuel}</div><div><b>Diesel Filling</b><span>Record diesel filling and DG hours</span></div><span class="ar">${I.chev}</span></button>
     <button class="mcard m-b" onclick="location.hash='#/energy'"><div class="ic">${I.meter}</div><div><b>Energy Reading</b><span>EB meter and operator readings</span></div><span class="ar">${I.chev}</span></button>
     <button class="mcard m-o" onclick="location.hash='#/request'"><div class="ic">${I.wa}</div><div><b>Make Diesel Request Message</b><span>Generate and share via WhatsApp</span></div><span class="ar">${I.chev}</span></button>
+    <button class="mcard m-t" onclick="location.hash='#/stock'"><div class="ic">${I.barrel}</div><div><b>Diesel Stock Management</b><span>Allocation, purchases, transfers &amp; reports</span></div><span class="ar">${I.chev}</span></button>
   </div>
   <div class="qs"><div><b>${activeSites().length}</b><span>Sites</span></div><div><b>${tD}</b><span>Diesel today</span></div><div><b>${tE}</b><span>Energy today</span></div></div>
   ${!S.user?`<div class="wrap" style="padding-top:0"><div class="note">Tip: set your name in <a href="#/settings">Settings</a> so records show who entered them.</div></div>`:''}
@@ -713,22 +731,23 @@ function DieselPage(sid){
 
 /* ================= ENERGY PAGE ================= */
 function EnergyPage(sid){
-  const site=siteById(sid);if(!site)return SiteList('energy');preloadOCR();const SOPS=siteCfg(sid).ops;
-  const F={dt:nowLocal(),kwh:'',kvah:'',src:{},ops:{}};
-  SOPS.forEach(o=>{F.ops[o]={};CHS.forEach(c=>F.ops[o][c]={kw:'',amp:''})});
-  let tab=SOPS[0];let P;
+  const site=siteById(sid);if(!site)return SiteList('energy');preloadOCR();const SOPS=siteCfg(sid).ops.slice();
+  const F={dt:nowLocal(),kwh:'',kvah:'',dg:'',piu:'',src:{},ops:{}};
+  const initOp=o=>{if(!F.ops[o]){F.ops[o]={};CHS.forEach(c=>F.ops[o][c]={kw:'',amp:''})}};
+  SOPS.forEach(initOp);
+  let tab=SOPS[0];let P;const PV={};
+  const LBL={kwh:'EB kWh',kvah:'EB kVAh',dg:'DG HMR',piu:'PIU HMR'};
   const prevE=()=>lastRecBefore(sid,'energy',dayOf(F.dt));
   function hints(){
     P=prevE();const day=dayOf(F.dt);
-    const k=lastBefore(fieldHist(sid,'kwh'),day,false),v=lastBefore(fieldHist(sid,'kvah'),day,false);
-    $('#h-kwh').textContent=k?`Previous: ${fmtN(k.v)} on ${fmtD(k.dt)}`:'No previous reading';
-    $('#h-kvah').textContent=v?`Previous: ${fmtN(v.v)} on ${fmtD(v.dt)}`:'No previous reading';
-    $('#pinfo').innerHTML=`<span>Previous Date</span><b>${P?fmtD(P.dt):'—'}</b><span></span><b></b><span>EB kWh</span><b>${k?fmtN(k.v):'—'}</b><span>EB kVAh</span><b>${v?fmtN(v.v):'—'}</b>`;
-    hints.k=k;hints.v=v;
+    ['kwh','kvah','dg','piu'].forEach(k=>{PV[k]=lastBefore(fieldHist(sid,k),day,false);$('#h-'+k).textContent=PV[k]?`Previous: ${fmtN(PV[k].v)} on ${fmtD(PV[k].dt)}`:'No previous reading'});
+    $('#pinfo').innerHTML=`<span>Previous Date</span><b>${P?fmtD(P.dt):'—'}</b><span></span><b></b><span>EB kWh</span><b>${PV.kwh?fmtN(PV.kwh.v):'—'}</b><span>EB kVAh</span><b>${PV.kvah?fmtN(PV.kvah.v):'—'}</b><span>DG HMR</span><b>${PV.dg?fmtN(PV.dg.v):'—'}</b><span>PIU HMR</span><b>${PV.piu?fmtN(PV.piu.v):'—'}</b>`;
   }
   function opTable(){
+    if(!SOPS.length){$('#tabs').innerHTML=`<button id="addop" style="flex:none">+ Add operator</button>`;$('#optbl').innerHTML='<tr><td class="empty">No operators for this site</td></tr>';$('#addop').onclick=addOp;return}
+    if(!SOPS.includes(tab))tab=SOPS[0];
     const prevOps=P?.data.ops?.[tab]||{};
-    $('#tabs').innerHTML=SOPS.map(o=>{const has=CHS.some(c=>isNum(F.ops[o][c].kw)||isNum(F.ops[o][c].amp));return `<button data-tab="${o}" class="${o===tab?'on':''}">${o}${has?'<span class="tk"></span>':''}</button>`}).join('');
+    $('#tabs').innerHTML=SOPS.map(o=>{const has=CHS.some(c=>isNum(F.ops[o][c].kw)||isNum(F.ops[o][c].amp));return `<button data-tab="${esc(o)}" class="${o===tab?'on':''}">${esc(o)}${has?'<span class="tk"></span>':''}</button>`}).join('')+`<button id="addop" style="flex:none;min-width:48px;font-size:18px;color:var(--g1)" title="Add operator">+</button>`;
     $('#optbl').innerHTML=`<tr><th>CH</th><th>kW</th><th>Amp</th><th></th></tr>`+CHS.map(c=>{
       const v=F.ops[tab][c],pv=prevOps[c]||{};
       const cls=f=>{const s=F.src[`${tab}.${c}.${f}`];return s==='EST'?'est':s==='OCR'?'ocr':''};
@@ -737,6 +756,7 @@ function EnergyPage(sid){
       <td><input class="inp ${cls('amp')}" data-op="${c}" data-f="amp" type="number" inputmode="decimal" step="any" value="${v.amp}" placeholder="${isNum(pv.amp)?'prev '+pv.amp:'A'}"></td>
       <td><div class="mini"><button class="mb t-cam" data-ocam="${c}">${I.cam}</button><button class="mb t-est" data-oest="${c}">${I.est}</button></div></td></tr>`}).join('');
     $$('[data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;opTable()});
+    $('#addop').onclick=addOp;
     $$('[data-op]').forEach(el=>el.oninput=()=>{const c=el.dataset.op,f=el.dataset.f;F.ops[tab][c][f]=el.value;F.src[`${tab}.${c}.${f}`]='MANUAL';el.classList.remove('est','ocr')});
     $$('[data-ocam]').forEach(b=>b.onclick=()=>{const c=b.dataset.ocam;openOCR(`${tab} CH${c}`,(v,t)=>{const f=t==='Amp'?'amp':'kw';F.ops[tab][c][f]=v;F.src[`${tab}.${c}.${f}`]='OCR';opTable()},['kW','Amp'])});
     $$('[data-oest]').forEach(b=>b.onclick=()=>{const c=b.dataset.oest;let got=0;
@@ -744,38 +764,59 @@ function EnergyPage(sid){
       if(!got)return toast(`No previous ${tab} CH${c} readings to estimate from`);
       toast('Estimated from average of last readings');opTable()});
   }
+  function addOp(){
+    const others=OPS.filter(o=>!SOPS.includes(o));
+    modal(`<h3>Add operator to ${esc(site.name)}</h3>
+      ${others.length?`<div class="lbl">Existing operators</div><div class="opts">${others.map(o=>`<button data-pick="${esc(o)}">${esc(o)}</button>`).join('')}</div><div class="lbl mt">Or a new operator</div>`:'<div class="lbl">New operator name</div>'}
+      <input class="sel" id="newop" placeholder="e.g. Tata, Reliance, ACT" maxlength="24">
+      <div class="hint">A new operator is added only to this site. To add it to other sites, use Settings → Site Settings.</div>
+      <div class="btns"><button class="btn b-gr" onclick="closeModal()">Cancel</button><button class="btn b-g" id="opok">Add</button></div>`);
+    const done=async name=>{
+      name=cleanName(name);if(!name)return toast('Enter operator name');
+      const ex=OPS.find(o=>o.toLowerCase()===name.toLowerCase());
+      if(ex)name=ex;else{freezeSiteOps();OPS.push(name);S.operators=OPS.slice()}
+      if(SOPS.includes(name)){closeModal();tab=name;return opTable()}
+      SOPS.push(name);site.ops=SOPS.slice();initOp(name);await saveSiteConfig();
+      closeModal();tab=name;opTable();toast(name+' added to '+site.name);
+    };
+    $$('[data-pick]').forEach(b=>b.onclick=()=>done(b.dataset.pick));
+    $('#opok').onclick=()=>done($('#newop').value);
+  }
   render(header('Energy Reading - '+site.name,'#/energy')+`<div class="wrap">
     <div class="info b" id="pinfo"></div>
     <div class="field"><div class="lbl">Date &amp; Time</div><input class="inp sm" type="datetime-local" id="f-dt" value="${F.dt}"></div>
     ${rField('kwh','EB kWh Reading','','')}
     ${rField('kvah','EB kVAh Reading','','')}
+    ${rField('dg','DG Running Hours (HMR)','','',{est:false})}
+    ${rField('piu','PIU Running Hours (HMR)','','',{est:false})}
     <div class="sec-t mt">Operator Readings</div>
     <div class="tabs" id="tabs"></div>
     <div class="scroll"><table class="optbl" id="optbl"></table></div>
-    <div class="hint" style="margin:-6px 0 12px">Orange = estimate, blue = camera. Switch operators freely — values are kept until you save.</div>
+    <div class="hint" style="margin:-6px 0 12px">Orange = estimate, blue = camera. Tap <b>+</b> to add an operator. Switch operators freely — values are kept until you save.</div>
     <div class="btns"><button class="btn b-g" id="save">${I.save}Save Record</button><button class="btn b-gr" id="clr">${I.clear}Clear</button></div>
   </div>`,'home');
   hints();opTable();
-  const chk=()=>['kwh','kvah'].forEach(k=>{const p=k==='kwh'?hints.k:hints.v;const bad=isNum(F[k])&&p&&+F[k]<p.v;$('#f-'+k).classList.toggle('bad',!!bad);$('#e-'+k).textContent=bad?`Lower than previous reading (${fmtN(p.v)}). Check meter.`:''});
+  const chk=()=>['kwh','kvah','dg','piu'].forEach(k=>{const p=PV[k];const bad=isNum(F[k])&&p&&+F[k]<p.v;$('#f-'+k).classList.toggle('bad',!!bad);$('#e-'+k).textContent=bad?`Lower than previous reading (${fmtN(p.v)}). Check meter.`:''});
   $('#f-dt').onchange=e=>{F.dt=e.target.value||nowLocal();hints();opTable();chk()};
   $$('[data-k]').forEach(el=>el.oninput=()=>{const k=el.dataset.k;F[k]=el.value;setSrc(F,k,'MANUAL');chk()});
-  $$('[data-cam]').forEach(b=>b.onclick=()=>{const k=b.dataset.cam;openOCR(k==='kwh'?'EB kWh':'EB kVAh',v=>{F[k]=v;$('#f-'+k).value=v;setSrc(F,k,'OCR');chk()})});
-  $$('[data-est]').forEach(b=>b.onclick=()=>{const k=b.dataset.est;showEstimate(sid,k,k==='kwh'?'EB kWh':'EB kVAh',F.dt,v=>{F[k]=v;$('#f-'+k).value=v;setSrc(F,k,'EST');chk()})});
+  $$('[data-cam]').forEach(b=>b.onclick=()=>{const k=b.dataset.cam;openOCR(LBL[k],v=>{F[k]=v;$('#f-'+k).value=v;setSrc(F,k,'OCR');chk()})});
+  $$('[data-est]').forEach(b=>b.onclick=()=>{const k=b.dataset.est;showEstimate(sid,k,LBL[k],F.dt,v=>{F[k]=v;$('#f-'+k).value=v;setSrc(F,k,'EST');chk()})});
   $('#clr').onclick=()=>{if(confirm('Clear all entered values (all operators)?'))EnergyPage(sid)};
   $('#save').onclick=async()=>{
     const anyOp=SOPS.some(o=>CHS.some(c=>isNum(F.ops[o][c].kw)||isNum(F.ops[o][c].amp)));
-    if(!isNum(F.kwh)&&!isNum(F.kvah)&&!anyOp)return toast('Nothing to save – enter at least one reading');
+    if(!['kwh','kvah','dg','piu'].some(k=>isNum(F[k]))&&!anyOp)return toast('Nothing to save – enter at least one reading');
     if($$('.inp.bad').length&&!confirm('Some readings are lower than previous (meter reset/replaced?). Save anyway?'))return;
     const day=dayOf(F.dt);const dup=sameDayRec(sid,'energy',day);
     if(dup&&!confirm(`An energy record for ${site.name} on ${fmtD(day)} already exists.\nOK = replace it\nCancel = do not save`))return;
     const ops={};const src={};
     SOPS.forEach(o=>{ops[o]={};CHS.forEach(c=>{const v=F.ops[o][c];ops[o][c]={kw:isNum(v.kw)?+v.kw:'',amp:isNum(v.amp)?+v.amp:''};['kw','amp'].forEach(f=>{if(isNum(v[f]))src[`${o}.${c}.${f}`]=F.src[`${o}.${c}.${f}`]||'MANUAL'})})});
-    if(isNum(F.kwh))src.kwh=F.src.kwh||'MANUAL';if(isNum(F.kvah))src.kvah=F.src.kvah||'MANUAL';
+    ['kwh','kvah','dg','piu'].forEach(k=>{if(isNum(F[k]))src[k]=F.src[k]||'MANUAL'});
+    const pv=k=>PV[k]?{dt:PV[k].dt,v:PV[k].v}:null;
     const rec={id:dup?dup.id:uid(),type:'energy',site:sid,siteName:site.name,dt:F.dt,user:S.user,phone:S.phone,email:ACCOUNT?ACCOUNT.email:'',createdAt:dup?dup.createdAt:Date.now(),deleted:false,
-      data:{kwh:isNum(F.kwh)?+F.kwh:'',kvah:isNum(F.kvah)?+F.kvah:'',ops,prevKwh:hints.k?{dt:hints.k.dt,v:hints.k.v}:null,prevKvah:hints.v?{dt:hints.v.dt,v:hints.v.v}:null},src};
+      data:{kwh:isNum(F.kwh)?+F.kwh:'',kvah:isNum(F.kvah)?+F.kvah:'',dg:isNum(F.dg)?+F.dg:'',piu:isNum(F.piu)?+F.piu:'',ops,prevKwh:pv('kwh'),prevKvah:pv('kvah'),prevDg:pv('dg'),prevPiu:pv('piu')},src};
     await putRec(rec);
     modal(`<div class="okbig"><div class="c">${I.ok}</div><b>Energy Reading Saved!</b></div>
-    <div class="dl"><span>Site</span><b>${esc(site.name)}</b><span>Date</span><b>${fmtDT(rec.dt)}</b><span>EB kWh</span><b>${fmtN(rec.data.kwh)} ${src.kwh==='EST'?'(Est.)':''}</b><span>EB kVAh</span><b>${fmtN(rec.data.kvah)} ${src.kvah==='EST'?'(Est.)':''}</b><span>Operators filled</span><b>${SOPS.filter(o=>CHS.some(c=>isNum(ops[o][c].kw)||isNum(ops[o][c].amp))).join(', ')||'—'}</b></div>
+    <div class="dl"><span>Site</span><b>${esc(site.name)}</b><span>Date</span><b>${fmtDT(rec.dt)}</b>${['kwh','kvah','dg','piu'].map(k=>`<span>${LBL[k]}</span><b>${fmtN(rec.data[k])} ${src[k]==='EST'?'(Est.)':''}</b>`).join('')}<span>Operators filled</span><b>${esc(SOPS.filter(o=>CHS.some(c=>isNum(ops[o][c].kw)||isNum(ops[o][c].amp))).join(', ')||'—')}</b></div>
     <div class="btns"><button class="btn b-gr" onclick="location.hash='#/history'">View History</button><button class="btn b-g" onclick="location.hash='#/'">Back to Menu</button></div>`);
   };
 }
@@ -885,6 +926,318 @@ function MsgPage(){
   $('#wa').onclick=async()=>{await persist();const n=(siteCfg(MSG.sid).wa||'').replace(/\D/g,'');window.open(`https://wa.me/${n}?text=${encodeURIComponent(ta.value)}`,'_blank')};
 }
 
+/* ================= DIESEL STOCK MANAGEMENT ================= */
+/* Independent module: never changes Diesel Filling records; only READS their "Diesel Filled" litres as actual usage. */
+const SK={
+  allocation:{l:'Company Allocation',s:'Allocated',hint:'Diesel allocated / supplied by the company for this site.'},
+  purchase:{l:'Own Purchase',s:'Purchased',hint:'Extra diesel bought with your own money. Enter litres OR rupees — the other is calculated.'},
+  usage:{l:'Other Usage',s:'Used',hint:'Diesel used outside Diesel Filling (spillage, other equipment…). DG filling is taken automatically from Diesel Filling.'},
+  opening:{l:'Opening Stock',s:'Opening',hint:'Diesel already in hand when you start stock tracking for this site.'},
+  tin:{s:'Received'},tout:{s:'Transferred'},filled:{s:'Filled to DG'}
+};
+const fmtRs=v=>isNum(v)?'₹'+(+v).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';
+const fmtL=v=>fmtN(v,2)+' L';
+const stockRecs=()=>live().filter(r=>r.type==='stock');
+function priceOn(day){const h=(S.priceHistory||[]).filter(p=>p.from<=day).sort((a,b)=>a.from<b.from?-1:a.from>b.from?1:(a.at||0)-(b.at||0));return h.length?+h[h.length-1].price:+S.dieselPrice}
+function stockStart(sid){const st=siteById(sid)||{};if(st.stockStart)return st.stockStart;const ds=stockRecs().filter(r=>r.site===sid||r.data.to===sid).map(r=>dayOf(r.dt)).sort();return ds[0]||''}
+function stockMoves(sid){
+  const out=[];
+  stockRecs().forEach(r=>{const d=r.data,q=+d.qty||0;
+    if(d.kind==='transfer'){if(r.site===sid)out.push({r,dt:r.dt,kind:'tout',qty:q,delta:-q});if(d.to===sid)out.push({r,dt:r.dt,kind:'tin',qty:q,delta:q});return}
+    if(r.site!==sid)return;
+    out.push({r,dt:r.dt,kind:d.kind,qty:q,delta:d.kind==='usage'?-q:q,amount:+d.amount||0});
+  });
+  const start=stockStart(sid);
+  if(start)recsOf(sid,'diesel').forEach(r=>{const q=+r.data.filled||0;if(q>0&&dayOf(r.dt)>=start)out.push({r,dt:r.dt,kind:'filled',qty:q,delta:-q,auto:true})});
+  const pr={opening:0,allocation:1,purchase:2,tin:3,filled:4,usage:5,tout:6};
+  return out.sort((a,b)=>{const da=dayOf(a.dt),db=dayOf(b.dt);if(da!==db)return da<db?-1:1;if(pr[a.kind]!==pr[b.kind])return pr[a.kind]-pr[b.kind];return a.dt<b.dt?-1:a.dt>b.dt?1:0});
+}
+function stockSum(moves){
+  const t={opening:0,allocation:0,purchase:0,purchaseAmt:0,usage:0,filled:0,tin:0,tout:0,net:0};
+  moves.forEach(m=>{t[m.kind]+=m.qty;if(m.kind==='purchase')t.purchaseAmt+=m.amount||0;t.net+=m.delta});
+  Object.keys(t).forEach(k=>t[k]=r2(t[k]));
+  t.used=r2(t.filled+t.usage);t.remainingAlloc=r2(t.allocation-t.used);t.stock=t.net;
+  return t;
+}
+const movesBetween=(sid,from,to)=>stockMoves(sid).filter(m=>{const d=dayOf(m.dt);return(!from||d>=from)&&(!to||d<=to)});
+const stockOf=(sid,upto)=>stockSum(movesBetween(sid,'',upto));
+function stState(v){return v>0.004?{t:'PLUS',sym:'+',c:'var(--g1)',bg:'var(--gl)'}:v<-0.004?{t:'MINUS',sym:'−',c:'var(--r)',bg:'var(--rl)'}:{t:'ZERO',sym:'0',c:'var(--m)',bg:'#eef1ef'}}
+function stBadge(v,big){const s=stState(v);return `<span class="badge" style="background:${s.bg};color:${s.c};${big?'font-size:12px;padding:4px 10px':''}">${s.t} ${s.sym}</span>`}
+const today=()=>dayOf(nowLocal());
+function dtFor(day){const n=nowLocal();return day===dayOf(n)?n:day+'T'+n.slice(11,16)}
+
+/* ---------- stock home ---------- */
+let STQ='';
+function StockHome(){
+  const rows=activeSites().map((s,i)=>({s,i,t:stockOf(s.id)}));
+  const T=rows.reduce((a,x)=>{['allocation','used','stock','purchaseAmt','purchase'].forEach(k=>a[k]=r2((a[k]||0)+x.t[k]));return a},{});
+  render(header('Diesel Stock','#/')+`<div class="wrap">
+    <div class="tiles">
+      <div class="tile" style="background:var(--gl)"><div class="ti" style="background:var(--g1)">${I.fuel}</div><div><span>Total Allocated</span><b>${fmtN(T.allocation,1)} L</b></div></div>
+      <div class="tile" style="background:var(--bl)"><div class="ti" style="background:var(--b)">${I.clock}</div><div><span>Actual Used</span><b>${fmtN(T.used,1)} L</b></div></div>
+      <div class="tile" style="background:var(--tl)"><div class="ti" style="background:var(--tt)">${I.barrel}</div><div><span>Available Stock</span><b>${fmtN(T.stock,1)} L</b></div></div>
+      <div class="tile" style="background:var(--ol)"><div class="ti" style="background:var(--o)">₹</div><div><span>Own Purchases</span><b style="font-size:16px">${fmtRs(T.purchaseAmt)}</b></div></div>
+    </div>
+    <div class="btns" style="margin:0 0 10px"><button class="btn b-t" onclick="openTransfer()">${I.swap}Transfer</button><button class="btn b-g" onclick="location.hash='#/stockreport'">${I.hist}Monthly Report</button></div>
+    <button class="rec" onclick="editPrice()" style="margin-bottom:12px"><span class="tg" style="background:var(--ol);color:#b65400">PRICE</span><span class="mid"><b>Diesel price ${fmtRs(S.dieselPrice)} / L</b><small>Tap to change · price history kept</small></span><span class="ar" style="width:18px;color:#9aa6a0">${I.chev}</span></button>
+    <input class="sel" id="stq" placeholder="Search site…" value="${esc(STQ)}" style="margin-bottom:6px">
+  </div>
+  <ul class="slist acc-t" id="stl">${rows.map(({s,i,t})=>`<li data-n="${esc(s.name.toLowerCase())}"><a href="#/stock/${s.id}"><span class="num">${i+1}</span><span class="nm"><b>${esc(s.name)}</b><small>Alloc ${fmtN(t.allocation,1)} · Used ${fmtN(t.used,1)} · Bought ${fmtN(t.purchase,1)}</small></span><span style="text-align:right"><b style="color:${stState(t.stock).c}">${fmtN(t.stock,1)} L</b><br>${stBadge(t.stock)}</span></a></li>`).join('')}</ul>`,'home');
+  const f=()=>{STQ=$('#stq').value.trim().toLowerCase();$$('#stl li').forEach(li=>li.style.display=!STQ||li.dataset.n.includes(STQ)?'':'none')};
+  $('#stq').oninput=f;f();
+}
+
+/* ---------- price ---------- */
+function editPrice(){
+  const h=(S.priceHistory||[]).slice().sort((a,b)=>a.from<b.from?1:-1);
+  modal(`<h3>Diesel Price Reference</h3>
+    <div class="g2"><div class="setf"><label>New price (₹ / L)</label><input class="sel" id="pp" type="number" step="0.01" inputmode="decimal" value="${S.dieselPrice}"></div>
+    <div class="setf"><label>Effective from</label><input class="sel" id="pd" type="date" value="${today()}"></div></div>
+    <div class="hint">Old transactions keep the price they were saved with.</div>
+    <div class="btns"><button class="btn b-gr" onclick="closeModal()">Cancel</button><button class="btn b-g" id="psave">${I.save}Save Price</button></div>
+    <div class="sec-t mt">Price History</div>
+    <div class="scroll"><table class="tbl"><tr><th>From</th><th class="r">₹ / L</th><th>By</th></tr>${h.map(p=>`<tr><td>${fmtD(p.from)}</td><td class="r">${fmtN(p.price,2)}</td><td>${esc(p.user||'—')}</td></tr>`).join('')}</table></div>`);
+  $('#psave').onclick=async()=>{const p=+$('#pp').value,d=$('#pd').value;if(!(p>0))return toast('Enter a valid price');if(!d)return toast('Select a date');
+    S.priceHistory=(S.priceHistory||[]).filter(x=>x.from!==d).concat([{price:r2(p),from:d,user:S.user,at:Date.now()}]);S.dieselPrice=priceOn(today());saveS();await saveSiteConfig();closeModal();toast('Price saved');route()};
+}
+
+/* ---------- entry form (used inline and for edits) ---------- */
+function stockFormHTML(kind,val){
+  val=val||{};const day=val.day||today();
+  return `<div class="tabs" data-r="kinds">${['allocation','purchase','usage','opening'].map(k=>`<button data-kind="${k}" class="${k===kind?'on':''}">${SK[k].s}</button>`).join('')}</div>
+  <div class="hint" data-r="khint" style="margin:-4px 0 10px"></div>
+  <div class="g2"><div class="field"><div class="lbl">Date</div><input class="inp sm" type="date" data-r="day" value="${day}" max="${today()}"></div>
+  <div class="field" data-r="pricebox"><div class="lbl">Price ₹ / L</div><input class="inp sm" type="number" step="0.01" inputmode="decimal" data-r="price" value="${val.price??priceOn(day)}"></div></div>
+  <div data-r="modebox"><div class="tabs" style="margin-bottom:10px"><button data-mode="litres" class="${val.mode!=='amount'?'on':''}">Enter Litres</button><button data-mode="amount" class="${val.mode==='amount'?'on':''}">Enter Amount ₹</button></div></div>
+  <div class="field" data-r="qtybox"><div class="lbl">Diesel quantity (L)</div><input class="inp" type="number" step="any" inputmode="decimal" data-r="qty" value="${val.qty??''}" placeholder="Litres"></div>
+  <div class="field" data-r="amtbox"><div class="lbl">Amount paid (₹)</div><input class="inp" type="number" step="any" inputmode="decimal" data-r="amount" value="${val.amount??''}" placeholder="Rupees"></div>
+  <div class="calc" data-r="calc" style="display:none"></div>
+  <div class="field"><div class="lbl">Remarks</div><input class="inp sm" data-r="remarks" value="${esc(val.remarks||'')}" placeholder="Optional"></div>`;
+}
+function bindStockForm(root,sid,rec,onDone){
+  const q=n=>root.querySelector(`[data-r="${n}"]`);
+  let kind=rec?rec.data.kind:'allocation',mode=rec?.data.mode==='amount'?'amount':'litres';
+  function calc(){
+    const isP=kind==='purchase',price=+q('price').value;
+    q('pricebox').style.visibility=isP?'visible':'hidden';q('modebox').style.display=isP?'':'none';
+    q('qtybox').style.display=!isP||mode==='litres'?'':'none';q('amtbox').style.display=isP&&mode==='amount'?'':'none';
+    q('khint').textContent=SK[kind].hint;
+    root.querySelectorAll('[data-kind]').forEach(b=>b.classList.toggle('on',b.dataset.kind===kind));
+    root.querySelectorAll('[data-mode]').forEach(b=>b.classList.toggle('on',b.dataset.mode===mode));
+    const c=q('calc');
+    if(isP){
+      let qty,amt;
+      if(mode==='litres'){qty=+q('qty').value;amt=qty&&price?r2(qty*price):0}else{amt=+q('amount').value;qty=amt&&price?r2(amt/price):0}
+      c.style.display='';c.innerHTML=`<div class="l"><span>Quantity</span><b>${fmtL(qty||0)}</b></div><div class="l"><span>Price</span><b>${fmtRs(price||0)} / L</b></div><div class="l tot"><span>Total amount</span><b>${fmtRs(amt||0)}</b></div>`;
+      return {qty,amt,price};
+    }
+    c.style.display='none';return {qty:+q('qty').value,amt:0,price:0};
+  }
+  root.querySelectorAll('[data-kind]').forEach(b=>b.onclick=()=>{kind=b.dataset.kind;calc()});
+  root.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{mode=b.dataset.mode;calc()});
+  ['qty','amount','price'].forEach(n=>q(n).oninput=calc);
+  q('day').onchange=()=>{if(!rec)q('price').value=priceOn(q('day').value||today());calc()};
+  calc();
+  return async()=>{
+    const v=calc(),day=q('day').value;
+    if(!day)return toast('Select a date');
+    if(!(v.qty>0))return toast(kind==='purchase'&&mode==='amount'?'Enter amount and price':'Enter diesel quantity');
+    if(kind==='purchase'&&!(v.price>0))return toast('Enter price per litre');
+    if(kind==='usage'){const avail=stockOf(sid).stock+(rec&&rec.data.kind==='usage'?+rec.data.qty:0);if(v.qty>avail&&!confirm(`Usage ${v.qty} L is more than available stock (${fmtN(avail,2)} L). Save anyway? Stock will show MINUS.`))return}
+    const data={kind,qty:r2(v.qty),mode:kind==='purchase'?mode:'litres',price:kind==='purchase'?r2(v.price):'',amount:kind==='purchase'?r2(v.amt):'',remarks:q('remarks').value.trim()};
+    const site=siteById(sid);
+    let r;
+    if(rec){r=rec;r.history=(r.history||[]).concat([{at:Date.now(),user:S.user,dt:r.dt,data:r.data}]);r.dt=dayOf(r.dt)===day?r.dt:dtFor(day);r.data=data;r.editedBy=S.user}
+    else r={id:uid(),type:'stock',site:sid,siteName:site.name,dt:dtFor(day),user:S.user,phone:S.phone,email:ACCOUNT?ACCOUNT.email:'',createdAt:Date.now(),deleted:false,data,src:{}};
+    await putRec(r);onDone(r);
+  };
+}
+
+/* ---------- transfer ---------- */
+function openTransfer(fromSid,rec){
+  const d=rec?rec.data:{};fromSid=rec?rec.site:fromSid||'';
+  const opts=sel=>activeSites().map(s=>`<option value="${s.id}" ${s.id===sel?'selected':''}>${esc(s.name)}</option>`).join('');
+  modal(`<h3>${rec?'Edit':'Diesel Stock'} Transfer</h3>
+    <div class="setf"><label>From site</label><select class="sel" id="tf"><option value="">Select…</option>${opts(fromSid)}</select><div class="hint" id="tav"></div></div>
+    <div class="setf"><label>To site</label><select class="sel" id="tt"><option value="">Select…</option>${opts(d.to||'')}</select></div>
+    <div class="g2"><div class="setf"><label>Quantity (L)</label><input class="sel" id="tq" type="number" step="any" inputmode="decimal" value="${d.qty??''}"></div>
+    <div class="setf"><label>Date</label><input class="sel" id="td" type="date" max="${today()}" value="${rec?dayOf(rec.dt):today()}"></div></div>
+    <div class="setf"><label>Remarks</label><input class="sel" id="tr" value="${esc(d.remarks||'')}" placeholder="e.g. Emergency diesel requirement"></div>
+    <div class="err" id="terr"></div>
+    <div class="btns"><button class="btn b-gr" onclick="closeModal()">Cancel</button><button class="btn b-t" id="tsave">${I.swap}${rec?'Save':'Transfer'}</button></div>`);
+  const avail=()=>{const f=$('#tf').value;if(!f)return 0;let a=stockOf(f).stock;if(rec&&rec.site===f)a+=+rec.data.qty;return r2(a)};
+  const upd=()=>{const f=$('#tf').value;$('#tav').innerHTML=f?`Available stock: <b>${fmtL(avail())}</b>`:''};
+  $('#tf').onchange=upd;upd();
+  $('#tsave').onclick=async()=>{
+    const f=$('#tf').value,t=$('#tt').value,qty=r2(+$('#tq').value),day=$('#td').value;$('#terr').textContent='';
+    if(!f||!t)return $('#terr').textContent='Select both sites.';
+    if(f===t)return $('#terr').textContent='From and To site must be different.';
+    if(!(qty>0))return $('#terr').textContent='Enter quantity.';
+    const a=avail();if(qty>a)return $('#terr').textContent=`Not allowed: only ${fmtL(a)} available at ${siteName(f)}.`;
+    const data={kind:'transfer',qty,to:t,toName:siteName(t),remarks:$('#tr').value.trim(),mode:'litres',price:'',amount:''};
+    let r;
+    if(rec){r=rec;r.history=(r.history||[]).concat([{at:Date.now(),user:S.user,dt:r.dt,site:r.site,data:r.data}]);r.site=f;r.siteName=siteName(f);r.dt=dayOf(r.dt)===day?r.dt:dtFor(day);r.data=data;r.editedBy=S.user}
+    else r={id:uid(),type:'stock',site:f,siteName:siteName(f),dt:dtFor(day),user:S.user,phone:S.phone,email:ACCOUNT?ACCOUNT.email:'',createdAt:Date.now(),deleted:false,data,src:{}};
+    await putRec(r);closeModal();toast(`${fmtL(qty)} transferred ${siteName(f)} → ${siteName(t)}`);route();
+  };
+}
+
+/* ---------- site stock page ---------- */
+const STF={kind:'',from:'',to:''};
+function StockSite(sid){
+  const site=siteById(sid);if(!site)return StockHome();
+  const t=stockOf(sid),st=stState(t.stock),start=stockStart(sid);
+  const all=stockMoves(sid);let bal=0;all.forEach(m=>{bal=r2(bal+m.delta);m.bal=bal});
+  const list=all.filter(m=>(!STF.kind||m.kind===STF.kind)&&(!STF.from||dayOf(m.dt)>=STF.from)&&(!STF.to||dayOf(m.dt)<=STF.to));
+  const row=(l,v,cls='')=>`<div class="l ${cls}"><span>${l}</span><b>${v}</b></div>`;
+  const kl={allocation:'ALLOC',purchase:'BUY',usage:'USED',opening:'OPEN',tin:'IN',tout:'OUT',filled:'DG FILL'};
+  const kc={allocation:'tg-diesel',purchase:'tg-request',usage:'tg-energy',opening:'tg-energy',tin:'tg-stock',tout:'tg-stock',filled:'tg-diesel'};
+  render(header('Stock - '+site.name,'#/stock')+`<div class="wrap">
+    <div class="bigv" style="background:${st.bg};margin-top:0"><div style="font-size:12px;color:var(--m)">Current available stock</div><b style="color:${st.c}">${fmtN(t.stock,2)} L</b><div style="margin-top:4px">${stBadge(t.stock,1)}</div></div>
+    <div class="calc" style="margin-top:0">
+      ${t.opening?row('Opening stock',fmtL(t.opening)):''}
+      ${row('Total company allocated diesel',fmtL(t.allocation))}
+      ${row('Actual diesel filled to DG',fmtL(t.filled))}
+      ${t.usage?row('Other usage',fmtL(t.usage)):''}
+      ${row('Remaining allocated diesel',`<span style="color:${stState(t.remainingAlloc).c}">${fmtL(t.remainingAlloc)}</span>`)}
+      ${row('Additional diesel purchased',`${fmtL(t.purchase)} <small style="color:var(--m);font-weight:500">${fmtRs(t.purchaseAmt)}</small>`)}
+      ${row('Diesel transferred to other sites',fmtL(t.tout))}
+      ${row('Diesel received from other sites',fmtL(t.tin))}
+      ${row('Current available stock',`<span style="color:${st.c}">${fmtL(t.stock)}</span>`,'tot')}
+    </div>
+    <div class="hint" style="margin:-6px 0 12px">DG filling is read from Diesel Filling records ${start?`from <b>${fmtD(start)}</b>`:'(starts with your first stock entry)'}. <a href="javascript:setStockStart('${sid}')">Change</a></div>
+    <div class="btns" style="margin:0 0 14px"><button class="btn b-gr" onclick="dailyReport('${sid}')">${I.hist}Daily Report</button><button class="btn b-t" onclick="openTransfer('${sid}')">${I.swap}Transfer</button></div>
+    <div class="card" id="sform"><h3>New Stock Entry</h3>${stockFormHTML('allocation')}<button class="btn b-g" id="ssave" style="width:100%">${I.save}Save Entry</button></div>
+    <div class="sec-t">Transactions (${list.length})</div>
+    <div class="filters"><select class="sel" id="fk" style="grid-column:1/3"><option value="">All transaction types</option>${Object.keys(kl).map(k=>`<option value="${k}" ${STF.kind===k?'selected':''}>${SK[k].s}</option>`).join('')}</select>
+      <input class="sel" type="date" id="ff" value="${STF.from}" title="From date"><input class="sel" type="date" id="ft" value="${STF.to}" title="To date"></div>
+    ${list.length?`<div class="scroll"><table class="tbl"><tr><th>Date</th><th>Type</th><th class="r">Litres</th><th class="r">Balance</th></tr>
+      ${list.map(m=>`<tr data-mid="${m.r.id}" data-auto="${m.auto?1:''}" style="cursor:pointer"><td>${fmtD(m.dt)}<br><small style="color:var(--m)">${m.dt.slice(11,16)}</small></td><td><span class="tg ${kc[m.kind]}" style="font-size:9.5px;padding:2px 5px;border-radius:5px;font-weight:800">${kl[m.kind]}</span>${m.kind==='tin'?`<br><small>from ${esc(siteName(m.r.site))}</small>`:m.kind==='tout'?`<br><small>to ${esc(siteName(m.r.data.to))}</small>`:m.kind==='purchase'?`<br><small>${fmtRs(m.amount)}</small>`:''}${m.r.history?.length?' <small style="color:var(--y)">edited</small>':''}</td><td class="r" style="color:${m.delta<0?'var(--r)':'var(--g1)'};font-weight:700">${m.delta<0?'−':'+'}${fmtN(m.qty,2)}</td><td class="r" style="color:${stState(m.bal).c}">${fmtN(m.bal,2)}</td></tr>`).join('')}</table></div>`:'<div class="empty">No transactions yet. Add Opening Stock or Company Allocation above.</div>'}
+  </div>`,'home');
+  const save=bindStockForm($('#sform'),sid,null,r=>{toast(SK[r.data.kind].l+' saved');StockSite(sid)});
+  $('#ssave').onclick=save;
+  const rf=()=>{STF.kind=$('#fk').value;STF.from=$('#ff').value;STF.to=$('#ft').value;StockSite(sid)};
+  ['#fk','#ff','#ft'].forEach(x=>$(x).onchange=rf);
+  $$('[data-mid]').forEach(tr=>tr.onclick=()=>tr.dataset.auto?recDetail(tr.dataset.mid):stockDetail(tr.dataset.mid));
+}
+async function setStockStart(sid){
+  const st=siteById(sid);const cur=stockStart(sid);
+  modal(`<h3>Count DG filling from</h3><div class="hint" style="margin-bottom:10px">Diesel Filling entries on or after this date are counted as actual usage of this site's stock.</div>
+    <input class="sel" type="date" id="ssd" value="${cur}"><div class="btns"><button class="btn b-gr" id="ssr">Auto (first stock entry)</button><button class="btn b-g" id="sso">Save</button></div>`);
+  const sv=async v=>{if(v)st.stockStart=v;else delete st.stockStart;await saveSiteConfig();closeModal();StockSite(sid)};
+  $('#sso').onclick=()=>sv($('#ssd').value);$('#ssr').onclick=()=>sv('');
+}
+function stockDetail(id){
+  const r=RECS.find(x=>x.id===id);if(!r)return;const d=r.data;
+  const kindL=d.kind==='transfer'?'Transfer':SK[d.kind].l;
+  const hist=(r.history||[]).slice().reverse();
+  modal(`<h3>${kindL} · ${esc(siteName(r.site))}</h3>
+    <div class="dl"><span>Date</span><b>${fmtDT(r.dt)}</b>${d.kind==='transfer'?`<span>From → To</span><b>${esc(siteName(r.site))} → ${esc(siteName(d.to))}</b>`:''}
+    <span>Quantity</span><b>${fmtL(d.qty)}</b>${d.kind==='purchase'?`<span>Price</span><b>${fmtRs(d.price)} / L</b><span>Amount</span><b>${fmtRs(d.amount)}</b><span>Entered as</span><b>${d.mode==='amount'?'Rupees':'Litres'}</b>`:''}
+    <span>Remarks</span><b>${esc(d.remarks||'—')}</b><span>Entered by</span><b>${esc(r.user||'—')}</b>${r.editedBy?`<span>Last edited by</span><b>${esc(r.editedBy)}</b>`:''}</div>
+    ${hist.length?`<div class="sec-t">Edit history</div><div class="scroll"><table class="tbl"><tr><th>Changed</th><th>Before</th></tr>${hist.map(h=>`<tr><td>${new Date(h.at).toLocaleString('en-IN',{dateStyle:'short',timeStyle:'short'})}<br><small>${esc(h.user||'')}</small></td><td>${fmtD(h.dt)} · ${fmtL(h.data.qty)}${h.data.amount?' · '+fmtRs(h.data.amount):''}${h.data.to?' → '+esc(siteName(h.data.to)):''}</td></tr>`).join('')}</table></div>`:''}
+    <div class="btns"><button class="btn b-r" id="sdel">Delete</button><button class="btn b-b" id="sedit">${I.edit}Edit</button><button class="btn b-gr" onclick="closeModal()">Close</button></div>`);
+  $('#sdel').onclick=async()=>{if(!confirm('Delete this stock entry? Balances will be recalculated.'))return;r.history=(r.history||[]).concat([{at:Date.now(),user:S.user,dt:r.dt,data:r.data,deleted:true}]);r.deleted=true;await putRec(r);closeModal();toast('Entry deleted');route()};
+  $('#sedit').onclick=()=>{
+    if(d.kind==='transfer')return openTransfer(null,r);
+    modal(`<h3>Edit ${SK[d.kind].l}</h3><div id="eform">${stockFormHTML(d.kind,{day:dayOf(r.dt),qty:d.qty,amount:d.amount,price:d.price||priceOn(dayOf(r.dt)),mode:d.mode,remarks:d.remarks})}</div>
+      <div class="btns"><button class="btn b-gr" onclick="closeModal()">Cancel</button><button class="btn b-g" id="esave">${I.save}Save Changes</button></div>`);
+    $('#esave').onclick=bindStockForm($('#eform'),r.site,r,()=>{closeModal();toast('Entry updated (history kept)');route()});
+  };
+}
+
+/* ---------- daily report ---------- */
+function dailyRows(sid,day){
+  const dm=stockSum(movesBetween(sid,day,day)),cum=stockOf(sid,day),open=stockOf(sid,addDays(day,-1)).stock;
+  return {dm,cum,open};
+}
+function dailyText(sid,day){
+  const {dm,cum,open}=dailyRows(sid,day),st=stState(cum.stock);
+  return [`DIESEL STOCK REPORT`,`SITE: ${siteName(sid).toUpperCase()}`,`DATE: ${fmtD(day).replace(/\//g,'-')}`,'',
+    `Opening stock: ${fmtL(open)}`,`Company allocated diesel: ${fmtL(dm.allocation)}`,`Actual diesel filled: ${fmtL(dm.filled)}`,...(dm.usage?[`Other usage: ${fmtL(dm.usage)}`]:[]),
+    `Remaining allocation (today): ${fmtL(dm.remainingAlloc)}`,`Additional diesel purchased: ${fmtL(dm.purchase)}${dm.purchaseAmt?` (${fmtRs(dm.purchaseAmt)})`:''}`,
+    `Diesel received from other sites: ${fmtL(dm.tin)}`,`Diesel transferred out: ${fmtL(dm.tout)}`,'',
+    `Total remaining allocation: ${fmtL(cum.remainingAlloc)}`,`Current available stock: ${fmtL(cum.stock)} (${st.t} ${st.sym})`].join('\n');
+}
+function dailyReport(sid,day){
+  day=day||today();const {dm,cum,open}=dailyRows(sid,day),st=stState(cum.stock);
+  const R=(l,a,b)=>`<tr><td>${l}</td><td class="r">${a}</td><td class="r">${b}</td></tr>`;
+  modal(`<h3>Daily Stock Report</h3>
+    <div class="row" style="margin-bottom:10px"><select class="sel" id="drs">${activeSites().map(s=>`<option value="${s.id}" ${s.id===sid?'selected':''}>${esc(s.name)}</option>`).join('')}</select><input class="sel" type="date" id="drd" value="${day}" max="${today()}" style="max-width:150px"></div>
+    <div class="scroll"><table class="tbl"><tr><th>Description</th><th class="r">Today</th><th class="r">Total</th></tr>
+      ${R('Opening stock',fmtL(open),'')}
+      ${R('Company allocated diesel',fmtL(dm.allocation),fmtL(cum.allocation))}
+      ${R('Actual diesel filled',fmtL(dm.filled),fmtL(cum.filled))}
+      ${dm.usage||cum.usage?R('Other usage',fmtL(dm.usage),fmtL(cum.usage)):''}
+      ${R('Remaining allocation',fmtL(dm.remainingAlloc),fmtL(cum.remainingAlloc))}
+      ${R('Additional diesel purchased',fmtL(dm.purchase),fmtL(cum.purchase))}
+      ${R('Purchase amount',fmtRs(dm.purchaseAmt),fmtRs(cum.purchaseAmt))}
+      ${R('Received from other sites',fmtL(dm.tin),fmtL(cum.tin))}
+      ${R('Transferred out',fmtL(dm.tout),fmtL(cum.tout))}
+      <tr><td><b>Current available stock</b></td><td></td><td class="r"><b style="color:${st.c}">${fmtL(cum.stock)}</b></td></tr></table></div>
+    <div style="text-align:center;margin:-4px 0 10px">${stBadge(cum.stock,1)} <small style="color:var(--m)">${st.t==='PLUS'?'Additional stock available':st.t==='MINUS'?'Stock shortage / excess usage':'No remaining stock'}</small></div>
+    <div class="btns"><button class="btn b-gr" id="drc">${I.copy}Copy</button><button class="btn b-wa" id="drw">${I.wa}WhatsApp</button><button class="btn b-gr" onclick="closeModal()">Close</button></div>`);
+  $('#drs').onchange=()=>dailyReport($('#drs').value,$('#drd').value);
+  $('#drd').onchange=()=>dailyReport($('#drs').value,$('#drd').value||today());
+  const txt=()=>dailyText($('#drs').value,$('#drd').value);
+  $('#drc').onclick=async()=>{try{await navigator.clipboard.writeText(txt());toast('Report copied')}catch(e){toast('Copy failed')}};
+  $('#drw').onclick=()=>window.open(`https://wa.me/${(siteCfg(sid).wa||'').replace(/\D/g,'')}?text=${encodeURIComponent(txt())}`,'_blank');
+}
+
+/* ---------- monthly report ---------- */
+const MR={month:'',site:''};
+function monthRange(m){const [y,mo]=m.split('-').map(Number);const last=new Date(y,mo,0).getDate();return [`${m}-01`,`${m}-${pad(last)}`,last]}
+function monthSite(sid,m){const [a,b]=monthRange(m);const t=stockSum(movesBetween(sid,a,b));t.open=stockOf(sid,addDays(a,-1)).stock;t.close=stockOf(sid,b).stock;return t}
+function StockReport(){
+  MR.month=MR.month||today().slice(0,7);
+  const [a,b,days]=monthRange(MR.month);const isCur=MR.month===today().slice(0,7);const dCount=isCur?+today().slice(8,10):days;
+  const sites=MR.site?[siteById(MR.site)].filter(Boolean):activeSites();
+  const rows=sites.map(s=>({s,t:monthSite(s.id,MR.month)}));
+  const T={};['open','allocation','filled','usage','used','purchase','purchaseAmt','tin','tout','remainingAlloc','close'].forEach(k=>T[k]=r2(rows.reduce((x,r)=>x+(r.t[k]||0),0)));
+  const avail=MR.site?T.open+T.allocation+T.purchase+T.tin:T.open+T.allocation+T.purchase;
+  // monthly average usage across all months that have stock data
+  const allMonths=new Set();let allUsed=0;sites.forEach(s=>stockMoves(s.id).forEach(m=>{allMonths.add(dayOf(m.dt).slice(0,7));if(m.kind==='filled'||m.kind==='usage')allUsed+=m.qty}));
+  const mAvg=allMonths.size?r2(allUsed/allMonths.size):0;
+  const pct=(x,y)=>y>0?fmtN(x/y*100,1)+'%':'—';
+  const L=(l,v)=>`<div class="l"><span>${l}</span><b>${v}</b></div>`;
+  render(header('Monthly Stock Report','#/stock')+`<div class="wrap">
+    <div class="filters"><input class="sel" type="month" id="mrm" value="${MR.month}"><select class="sel" id="mrs"><option value="">All ${activeSites().length} sites</option>${activeSites().map(s=>`<option value="${s.id}" ${MR.site===s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select></div>
+    <div class="calc" style="margin-top:0">
+      <div style="font-weight:800;margin-bottom:4px">${MR.site?esc(siteName(MR.site)):'All sites'} · ${new Date(a+'T00:00').toLocaleString('en-IN',{month:'long',year:'numeric'})}</div>
+      ${L('Total company allocated diesel',fmtL(T.allocation))}
+      ${L('Total actual diesel filled',fmtL(T.filled))}
+      ${T.usage?L('Other usage',fmtL(T.usage)):''}
+      ${L('Total additional diesel purchased',fmtL(T.purchase))}
+      ${L(MR.site?'Transferred out / received':'Total diesel transferred between sites',MR.site?`${fmtL(T.tout)} / ${fmtL(T.tin)}`:fmtL(T.tout))}
+      ${L('Total remaining allocated diesel',fmtL(T.remainingAlloc))}
+      ${L('Total available diesel stock (month end)',`<span style="color:${stState(T.close).c}">${fmtL(T.close)}</span>`)}
+      <div class="l tot"><span>Total diesel purchase amount</span><b>${fmtRs(T.purchaseAmt)}</b></div>
+    </div>
+    <div class="card"><h3>Analysis</h3><div class="dl" style="margin:0">
+      <span>Daily average usage</span><b>${fmtN(T.used/dCount,2)} L/day</b>
+      <span>Monthly average usage</span><b>${fmtL(mAvg)}</b>
+      <span>Allocated vs filled</span><b>${fmtN(T.allocation,1)} / ${fmtN(T.filled,1)} L (${pct(T.filled,T.allocation)})</b>
+      <span>Remaining stock %</span><b>${pct(T.close,avail)}</b>
+      <span>Additional expenditure</span><b>${fmtRs(T.purchaseAmt)}</b></div></div>
+    ${MR.site?'':`<div class="sec-t">Site-wise (${fmtD(a)} – ${fmtD(b)})</div>
+    <div class="scroll"><table class="tbl"><tr><th>Site</th><th class="r">Alloc</th><th class="r">Filled</th><th class="r">Bought</th><th class="r">In/Out</th><th class="r">Stock</th></tr>
+      ${rows.map(({s,t})=>`<tr onclick="MR.site='${s.id}';StockReport()" style="cursor:pointer"><td>${esc(s.name)}</td><td class="r">${fmtN(t.allocation,1)}</td><td class="r">${fmtN(t.used,1)}</td><td class="r">${fmtN(t.purchase,1)}</td><td class="r">${t.tin||t.tout?`+${fmtN(t.tin,1)}/−${fmtN(t.tout,1)}`:'—'}</td><td class="r" style="color:${stState(t.close).c};font-weight:700">${fmtN(t.close,1)}</td></tr>`).join('')}
+      <tr style="font-weight:800;background:var(--gl)"><td>TOTAL</td><td class="r">${fmtN(T.allocation,1)}</td><td class="r">${fmtN(T.used,1)}</td><td class="r">${fmtN(T.purchase,1)}</td><td class="r">${fmtN(T.tout,1)}</td><td class="r">${fmtN(T.close,1)}</td></tr></table></div>
+    <div class="hint" style="margin:-6px 0 12px">Tap a site for its individual report. Filled = DG filling + other usage.</div>`}
+    ${MR.site?`<button class="btn b-gr" style="width:100%;margin-bottom:10px" onclick="location.hash='#/stock/${MR.site}'">Open ${esc(siteName(MR.site))} transactions</button>`:''}
+    <div class="btns"><button class="btn b-gr" id="mrc">${I.copy}Copy</button><button class="btn b-wa" id="mrw">${I.wa}WhatsApp</button><button class="btn b-g" onclick="exportExcel()">${I.xls}Excel</button></div>
+  </div>`,'home');
+  $('#mrm').onchange=e=>{MR.month=e.target.value||today().slice(0,7);StockReport()};
+  $('#mrs').onchange=e=>{MR.site=e.target.value;StockReport()};
+  const txt=()=>[`MONTHLY DIESEL STOCK REPORT`,`${MR.site?'SITE: '+siteName(MR.site).toUpperCase():'ALL SITES'}`,`MONTH: ${fmtD(a).slice(3)}`,'',
+    `Company allocated: ${fmtL(T.allocation)}`,`Actual filled: ${fmtL(T.filled)}`,...(T.usage?[`Other usage: ${fmtL(T.usage)}`]:[]),`Additional purchased: ${fmtL(T.purchase)}`,
+    `Transferred between sites: ${fmtL(T.tout)}`,`Remaining allocation: ${fmtL(T.remainingAlloc)}`,`Available stock (month end): ${fmtL(T.close)} (${stState(T.close).t})`,`Purchase amount: ${fmtRs(T.purchaseAmt)}`,'',
+    `Daily average usage: ${fmtN(T.used/dCount,2)} L/day`,`Remaining stock: ${pct(T.close,avail)}`,
+    ...(MR.site?[]:['','Site-wise stock:',...rows.map(({s,t})=>`${s.name}: ${fmtL(t.close)}`)])].join('\n');
+  $('#mrc').onclick=async()=>{try{await navigator.clipboard.writeText(txt());toast('Report copied')}catch(e){toast('Copy failed')}};
+  $('#mrw').onclick=()=>window.open(`https://wa.me/?text=${encodeURIComponent(txt())}`,'_blank');
+}
+
 /* ================= DASHBOARD ================= */
 function latestBySite(){
   return activeSites().map(s=>{const g=f=>{const h=fieldHist(s.id,f);return h[h.length-1]};const ds=recsOf(s.id,'diesel');return {s,fuel:g('fuel'),dg:g('dg'),kwh:g('kwh'),kvah:g('kvah'),last:ds[ds.length-1]}});
@@ -927,11 +1280,11 @@ const HF={site:'',type:'',from:'',to:''};
 function filtered(){return live().filter(r=>(!HF.site||r.site===HF.site)&&(!HF.type||r.type===HF.type)&&(!HF.from||dayOf(r.dt)>=HF.from)&&(!HF.to||dayOf(r.dt)<=HF.to)).sort((a,b)=>b.dt<a.dt?-1:b.dt>a.dt?1:0)}
 function History(){
   const list=filtered();
-  const right=r=>r.type==='diesel'?`${fmtN(r.data.closing,1)} L<br><small style="color:var(--m);font-weight:500">DG ${fmtN(r.data.dg)}</small>`:r.type==='energy'?`${fmtN(r.data.kwh)}<br><small style="color:var(--m);font-weight:500">kWh</small>`:`${fmtN(r.data.requirement,1)} L<br><small style="color:var(--m);font-weight:500">request</small>`;
+  const right=r=>r.type==='stock'?`${fmtN(r.data.qty,2)} L<br><small style="color:var(--m);font-weight:500">${r.data.kind==='transfer'?'→ '+esc(siteName(r.data.to)):SK[r.data.kind]?.s||''}</small>`:r.type==='diesel'?`${fmtN(r.data.closing,1)} L<br><small style="color:var(--m);font-weight:500">DG ${fmtN(r.data.dg)}</small>`:r.type==='energy'?`${fmtN(r.data.kwh)}<br><small style="color:var(--m);font-weight:500">kWh</small>`:`${fmtN(r.data.requirement,1)} L<br><small style="color:var(--m);font-weight:500">request</small>`;
   render(header('History','')+`<div class="wrap">
     <div class="filters">
       <select class="sel" id="hs"><option value="">All sites</option>${S.sites.map(s=>`<option value="${s.id}" ${HF.site===s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select>
-      <select class="sel" id="ht"><option value="">All types</option>${[['diesel','Diesel Filling'],['energy','Energy Reading'],['request','Diesel Request']].map(([k,l])=>`<option value="${k}" ${HF.type===k?'selected':''}>${l}</option>`).join('')}</select>
+      <select class="sel" id="ht"><option value="">All types</option>${[['diesel','Diesel Filling'],['energy','Energy Reading'],['request','Diesel Request'],['stock','Diesel Stock']].map(([k,l])=>`<option value="${k}" ${HF.type===k?'selected':''}>${l}</option>`).join('')}</select>
       <input class="sel" type="date" id="hf" value="${HF.from}" title="From"><input class="sel" type="date" id="hto" value="${HF.to}" title="To">
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><small style="color:var(--m)">${list.length} record(s)</small>
@@ -944,10 +1297,11 @@ function History(){
 }
 function recDetail(id){
   const r=RECS.find(x=>x.id===id);if(!r)return;
+  if(r.type==='stock')return stockDetail(id);
   const s=k=>{const v=(r.src||{})[k];return v&&v!=='MANUAL'?` <span class="badge bd-${v}">${v==='EST'?'EST':v}</span>`:''};
   let body='';
   if(r.type==='diesel'){const d=r.data;body=`<span>EB kWh</span><b>${fmtN(d.kwh)}${s('kwh')}</b><span>DG HMR</span><b>${fmtN(d.dg)}${s('dg')}</b><span>PIU HMR</span><b>${fmtN(d.piu)}${s('piu')}</b><span>Prev DG / date</span><b>${d.prev?fmtN(d.prev.dg)+' · '+fmtD(d.prev.dt):'—'}</b><span>Opening</span><b>${fmtN(d.opening,1)} L</b><span>Filled</span><b>${fmtN(d.filled,1)} L</b><span>DG hrs diff</span><b>${fmtN(d.dgDiff)}</b><span>Consumption</span><b>${fmtN(d.consumption,1)} L</b><span>Closing</span><b>${fmtN(d.closing,1)} L</b>`}
-  else if(r.type==='energy'){const d=r.data;body=`<span>EB kWh</span><b>${fmtN(d.kwh)}${s('kwh')}</b><span>EB kVAh</span><b>${fmtN(d.kvah)}${s('kvah')}</b>`+OPS.map(o=>{const c=d.ops?.[o];if(!c||!CHS.some(x=>isNum(c[x]?.kw)||isNum(c[x]?.amp)))return '';return `<span style="grid-column:1/3;font-weight:800;color:var(--t);margin-top:6px">${o}</span>`+CHS.map(x=>`<span>CH${x} kW / Amp</span><b>${fmtN(c[x]?.kw)}${s(`${o}.${x}.kw`)} / ${fmtN(c[x]?.amp)}${s(`${o}.${x}.amp`)}</b>`).join('')}).join('')}
+  else if(r.type==='energy'){const d=r.data;body=`<span>EB kWh</span><b>${fmtN(d.kwh)}${s('kwh')}</b><span>EB kVAh</span><b>${fmtN(d.kvah)}${s('kvah')}</b><span>DG HMR</span><b>${fmtN(d.dg)}${s('dg')}</b><span>PIU HMR</span><b>${fmtN(d.piu)}${s('piu')}</b>`+Object.keys(d.ops||{}).map(o=>{const c=d.ops?.[o];if(!c||!CHS.some(x=>isNum(c[x]?.kw)||isNum(c[x]?.amp)))return '';return `<span style="grid-column:1/3;font-weight:800;color:var(--t);margin-top:6px">${o}</span>`+CHS.map(x=>`<span>CH${x} kW / Amp</span><b>${fmtN(c[x]?.kw)}${s(`${o}.${x}.kw`)} / ${fmtN(c[x]?.amp)}${s(`${o}.${x}.amp`)}</b>`).join('')}).join('')}
   else body=`<span style="grid-column:1/3"></span></div><textarea class="msg" style="min-height:260px" readonly>${esc(r.data.message)}</textarea><div>`;
   modal(`<h3>${esc(siteName(r.site))} · ${r.type}</h3><div class="dl"><span>Date</span><b>${fmtDT(r.dt)}</b><span>Entered by</span><b>${esc(r.user||'—')}</b>${body}</div>
   <div class="btns">${r.type==='request'?`<button class="btn b-wa" id="rwa">${I.wa}Resend</button>`:''}<button class="btn b-r" id="del">Delete</button><button class="btn b-gr" onclick="closeModal()">Close</button></div>`);
@@ -967,14 +1321,31 @@ async function exportExcel(list){
   const n=v=>isNum(v)?+v:'';
   add('Diesel Filling Records',['Record ID','Date','Time','Site','EB kWh','kWh Source','DG HMR','DG Source','PIU HMR','PIU Source','Prev Date','Prev kWh','Prev DG HMR','Prev PIU HMR','Opening (L)','Filled (L)','DG Hrs Diff','Consumption (L)','Closing (L)','Rate L/Hr','User','Phone','Email'],
     by('diesel').map(r=>{const d=r.data;return [r.id,...dt(r),siteName(r.site),n(d.kwh),r.src?.kwh||'',n(d.dg),r.src?.dg||'',n(d.piu),r.src?.piu||'',d.prev?fmtD(d.prev.dt):'',d.prevKwh?d.prevKwh.v:'',d.prev?n(d.prev.dg):'',d.prev?n(d.prev.piu):'',n(d.opening),n(d.filled),n(d.dgDiff),n(d.consumption),n(d.closing),n(d.rate),r.user||'',r.phone||'',r.email||'']}));
-  add('Energy Readings',['Record ID','Date','Time','Site','EB kWh','kWh Source','EB kVAh','kVAh Source','Prev kWh','Prev kVAh','kWh Diff','kVAh Diff','User'],
-    by('energy').map(r=>{const d=r.data;return [r.id,...dt(r),siteName(r.site),n(d.kwh),r.src?.kwh||'',n(d.kvah),r.src?.kvah||'',d.prevKwh?.v??'',d.prevKvah?.v??'',isNum(d.kwh)&&d.prevKwh?r2(d.kwh-d.prevKwh.v):'',isNum(d.kvah)&&d.prevKvah?r2(d.kvah-d.prevKvah.v):'',r.user||'']}));
-  OPS.forEach(o=>add(o+' Records',['Record ID','Date','Time','Site','Channel','kW','kW Source','Amp','Amp Source','User'],
+  add('Energy Readings',['Record ID','Date','Time','Site','EB kWh','kWh Source','EB kVAh','kVAh Source','DG HMR','DG Source','PIU HMR','PIU Source','Prev kWh','Prev kVAh','kWh Diff','kVAh Diff','User'],
+    by('energy').map(r=>{const d=r.data;return [r.id,...dt(r),siteName(r.site),n(d.kwh),r.src?.kwh||'',n(d.kvah),r.src?.kvah||'',n(d.dg),r.src?.dg||'',n(d.piu),r.src?.piu||'',d.prevKwh?.v??'',d.prevKvah?.v??'',isNum(d.kwh)&&d.prevKwh?r2(d.kwh-d.prevKwh.v):'',isNum(d.kvah)&&d.prevKvah?r2(d.kvah-d.prevKvah.v):'',r.user||'']}));
+  const allOps=[...new Set([...OPS,...by('energy').flatMap(r=>Object.keys(r.data.ops||{}))])];
+  allOps.forEach(o=>add((o+' Records').slice(0,31),['Record ID','Date','Time','Site','Channel','kW','kW Source','Amp','Amp Source','User'],
     by('energy').flatMap(r=>CHS.map(c=>{const v=r.data.ops?.[o]?.[c];if(!v||(!isNum(v.kw)&&!isNum(v.amp)))return null;return [r.id,...dt(r),siteName(r.site),'CH'+c,n(v.kw),r.src?.[`${o}.${c}.kw`]||'',n(v.amp),r.src?.[`${o}.${c}.amp`]||'',r.user||'']}).filter(Boolean))));
   add('Diesel Request History',['Record ID','Date','Time','Site','Current Date','Previous Date','kWh Cons','kVAh Cons','DG Hrs','PIU Hrs','Fuel Diff (L)','Filled (L)','DG Consumption (L)','Requirement (L)','Message','User'],
     by('request').map(r=>{const d=r.data,c=d.calc||{};return [r.id,...dt(r),siteName(r.site),fmtD(d.curDay),fmtD(d.prevDay),n(c.kwh),n(c.kvah),n(c.dg),n(c.piu),n(c.fuelDiff),n(d.filled),n(c.cons),n(c.req),d.message,r.user||'']}));
   add('Site Master',['No','Site ID','Site Name','Active','Operators','Channels per Operator','DG Rate (L/Hr)','Opening Default (L)','Tank Capacity (L)','Low Fuel Alert (L)','Requirement Method','WhatsApp'],S.sites.map((s,i)=>{const c=siteCfg(s.id);return [i+1,s.id,s.name,s.hidden?'No':'Yes',c.ops.join(', '),4,c.rate,c.opening,c.tank||'',c.low,c.method==='tank'?'Fill tank to full':'DG consumption',c.wa]}));
   add('Previous Readings',['Site','Fuel (L)','Fuel Date','DG HMR','DG Date','EB kWh','kWh Date','EB kVAh','kVAh Date'],latestBySite().map(x=>[x.s.name,x.fuel?.v??'',x.fuel?fmtD(x.fuel.dt):'',x.dg?.v??'',x.dg?fmtD(x.dg.dt):'',x.kwh?.v??'',x.kwh?fmtD(x.kwh.dt):'',x.kvah?.v??'',x.kvah?fmtD(x.kvah.dt):'']));
+  const sr=live().filter(r=>r.type==='stock').sort((a,b)=>a.dt<b.dt?-1:1);
+  if(sr.length){
+    const kn=k=>k==='transfer'?'Transfer':SK[k]?.l||k;const base=r=>[r.id,...dt(r),siteName(r.site)];
+    add('Diesel Allocation Records',['Record ID','Date','Time','Site','Litres','Remarks','User'],sr.filter(r=>r.data.kind==='allocation').map(r=>[...base(r),n(r.data.qty),r.data.remarks||'',r.user||'']));
+    add('Diesel Stock Transactions',['Record ID','Date','Time','Site','Type','Litres','Price (Rs/L)','Amount (Rs)','Entered As','To Site','Remarks','User','Times Edited'],sr.map(r=>{const d=r.data;return [...base(r),kn(d.kind),n(d.qty),n(d.price),n(d.amount),d.mode==='amount'?'Rupees':'Litres',d.to?siteName(d.to):'',d.remarks||'',r.user||'',(r.history||[]).length]}));
+    add('Additional Diesel Purchases',['Record ID','Date','Time','Site','Litres','Price (Rs/L)','Amount (Rs)','Entered As','Remarks','User'],sr.filter(r=>r.data.kind==='purchase').map(r=>{const d=r.data;return [...base(r),n(d.qty),n(d.price),n(d.amount),d.mode==='amount'?'Rupees':'Litres',d.remarks||'',r.user||'']}));
+    add('Diesel Transfer Records',['Record ID','Date','Time','From Site','To Site','Litres','Remarks','User'],sr.filter(r=>r.data.kind==='transfer').map(r=>[...base(r),siteName(r.data.to),n(r.data.qty),r.data.remarks||'',r.user||'']));
+    const daily=[],monthly=[];
+    S.sites.forEach(st=>{const mv=stockMoves(st.id);const days=[...new Set(mv.map(m=>dayOf(m.dt)))].sort();
+      days.forEach(d=>{const t=stockSum(movesBetween(st.id,d,d)),c=stockOf(st.id,d);daily.push([fmtD(d),st.name,stockOf(st.id,addDays(d,-1)).stock,t.allocation,t.filled,t.usage,t.purchase,t.purchaseAmt,t.tin,t.tout,c.remainingAlloc,c.stock,stState(c.stock).t])});
+      [...new Set(days.map(d=>d.slice(0,7)))].forEach(m=>{const t=monthSite(st.id,m);monthly.push([m,st.name,t.open,t.allocation,t.filled,t.usage,t.purchase,t.purchaseAmt,t.tin,t.tout,t.remainingAlloc,t.close,stState(t.close).t])})});
+    daily.sort((x,y)=>x[0].split('/').reverse().join('')<y[0].split('/').reverse().join('')?-1:1);
+    add('Daily Stock Reports',['Date','Site','Opening Stock (L)','Allocated (L)','Filled to DG (L)','Other Usage (L)','Purchased (L)','Purchase (Rs)','Received (L)','Transferred Out (L)','Remaining Allocation - Total (L)','Closing Stock (L)','Status'],daily);
+    add('Monthly Stock Reports',['Month','Site','Opening (L)','Allocated (L)','Filled (L)','Other Usage (L)','Purchased (L)','Purchase (Rs)','Received (L)','Transferred Out (L)','Remaining Allocation (L)','Closing Stock (L)','Status'],monthly.sort((x,y)=>x[0]<y[0]?-1:1));
+    add('Diesel Price History',['Effective From','Price (Rs/L)','Changed By'],(S.priceHistory||[]).slice().sort((x,y)=>x.from<y.from?-1:1).map(p=>[fmtD(p.from),+p.price,p.user||'']));
+  }
   XLSX.writeFile(wb,`FieldRecord_${dayOf(nowLocal())}.xlsx`);
 }
 
@@ -993,7 +1364,7 @@ function editSite(sid,back){
   <div class="setf"><label>Diesel requirement method</label><select class="sel" id="e-method">
     <option value="consumption" ${c.method==='consumption'?'selected':''}>DG consumption − current fuel (default)</option>
     <option value="tank" ${c.method==='tank'?'selected':''}>Fill tank to full (needs tank capacity)</option></select></div>
-  <div class="setf"><label>Operators at this site</label><div class="opts" id="e-ops">${OPS.map(o=>`<button type="button" data-op="${o}" class="${c.ops.includes(o)?'on':''}">${o}</button>`).join('')}</div></div>
+  <div class="setf"><label>Operators at this site</label><div class="opts" id="e-ops">${OPS.map(o=>`<button type="button" data-op="${esc(o)}" class="${c.ops.includes(o)?'on':''}">${o}</button>`).join('')}</div></div>
   <div class="setf"><label>WhatsApp number for this site's requests (optional)</label><input class="sel" id="e-wa" inputmode="tel" value="${esc(st.wa||'')}" placeholder="${esc(S.waNumber||'e.g. 919876543210')}"></div>
   <label style="display:flex;align-items:center;gap:8px;font-size:14px;margin:6px 0 4px"><input type="checkbox" id="e-hidden" ${st.hidden?'checked':''} style="width:20px;height:20px"> Hide this site from lists (records are kept)</label>
   <div class="hint">Leave a box empty to use the default value from Settings.</div>
@@ -1031,6 +1402,10 @@ function Settings(){
       <ul class="slist" style="margin:0 -14px">${S.sites.map((st,i)=>{const c=siteCfg(st.id),own=['rate','opening','tank','low','method','ops','wa'].some(k=>st[k]!==undefined&&st[k]!==null&&st[k]!=='');
         return `<li><a href="javascript:editSite('${st.id}')"><span class="num" style="${st.hidden?'background:#aab4ae':''}">${i+1}</span><span class="nm"><b>${esc(st.name)}${st.hidden?' (hidden)':''}</b><small>${c.rate} L/Hr · Open ${c.opening} L${c.tank?' · Tank '+c.tank+' L':''} · ${c.ops.length} operators${own?' · custom':''}</small></span><span class="ar">${I.chev}</span></a></li>`}).join('')}</ul>
       <button class="btn b-gr mt" style="width:100%" id="s-add">+ Add new site</button></div>
+    <div class="card"><h3>Operators (${OPS.length})</h3>
+      <div class="hint" style="margin:0 0 8px">Adding here adds the operator to every site that uses the full list. To choose operators for one site, open that site above. Removing hides it from entry screens — old readings are kept.</div>
+      <div class="opts">${OPS.map(o=>`<button data-rmop="${esc(o)}" style="display:flex;align-items:center;gap:6px">${esc(o)} <span style="color:var(--r);font-weight:800">×</span></button>`).join('')}</div>
+      <div class="row mt"><input class="sel" id="s-newop" placeholder="New operator name" maxlength="30"><button class="btn b-g" style="flex:none;padding:10px 16px" id="s-addop">Add</button></div></div>
     <div class="card mt"><h3>Cloud Sync (Firebase)</h3>
       <div class="hint" style="margin:0 0 8px">Paste the <b>firebaseConfig</b> object from Firebase console → Project settings → Your apps → Web app. All phones using the same config share records.</div>
       <textarea class="sel" id="s-fb" rows="7" style="font-size:12px;font-family:monospace" placeholder='{ "apiKey": "...", "authDomain": "...", "projectId": "...", "appId": "..." }'>${S.firebase?esc(JSON.stringify(S.firebase,null,1)):''}</textarea>
@@ -1043,7 +1418,7 @@ function Settings(){
       <input type="file" id="s-impf" accept=".json" hidden>
       <div class="hint mt">${live().length} records on this phone · ${PENDING.size} waiting to sync</div></div>
     <div class="card"><h3>About</h3>
-      <div class="dl" style="margin:0"><span>App</span><b>Field Record</b><span>Version</span><b>1.1</b><span>Developer</span><b>Manu Brahma</b></div>
+      <div class="dl" style="margin:0"><span>App</span><b>Field Record</b><span>Version</span><b>1.2</b><span>Developer</span><b>Manu Brahma</b></div>
       <div class="note mt" style="margin-bottom:0"><b>Disclaimer:</b> Diesel consumption, requirement and estimated readings are calculated values. Always verify against actual meter and tank readings before submitting a diesel request. Values marked ESTIMATE / (Est.) are not actual meter readings.</div></div>
     ${footer(true)}
   </div>`,'settings');
@@ -1053,6 +1428,8 @@ function Settings(){
     S.openingDefault=+$('#s-open').value||60;S.rate=+$('#s-rate').value||3.5;S.lowFuel=+$('#s-low').value||30;
     saveS();toast('Settings saved');Settings();
   };
+  $('#s-addop').onclick=async()=>{const nm=cleanName($('#s-newop').value);if(!nm)return toast('Enter operator name');if(OPS.some(o=>o.toLowerCase()===nm.toLowerCase()))return toast(nm+' already exists');OPS.push(nm);S.operators=OPS.slice();await saveSiteConfig();toast(nm+' added');Settings()};
+  $$('[data-rmop]').forEach(b=>b.onclick=async()=>{const o=b.dataset.rmop;if(OPS.length<2)return toast('Keep at least one operator');if(!confirm(`Remove ${o} from all sites?\nPast ${o} readings stay in History and Excel.`))return;OPS.splice(OPS.indexOf(o),1);S.operators=OPS.slice();S.sites.forEach(st=>{if(Array.isArray(st.ops)){st.ops=st.ops.filter(x=>x!==o);if(!st.ops.length)delete st.ops}});await saveSiteConfig();toast(o+' removed');Settings()});
   $('#s-add').onclick=async()=>{const nm=(prompt('New site name')||'').trim();if(!nm)return;const id='s'+Date.now().toString(36);S.sites.push({id,name:nm});await saveSiteConfig();toast('Site added');Settings();editSite(id)};
   $('#s-fbsave').onclick=async()=>{
     let t=$('#s-fb').value.trim();if(!t)return toast('Paste the config first');
