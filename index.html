@@ -957,7 +957,7 @@ function MsgPage(){
 const SK={
   allocation:{l:'Company Allocation',s:'Allocated',hint:'Diesel allocated / supplied by the company for this site.'},
   purchase:{l:'Own Purchase',s:'Purchased',hint:'Extra diesel bought with your own money. Enter litres OR rupees — the other is calculated.'},
-  usage:{l:'Other Usage',s:'Used',hint:'Diesel used outside Diesel Filling (spillage, other equipment…). DG filling is taken automatically from Diesel Filling.'},
+  usage:{l:'Other Usage',s:'Used',hint:'Diesel used outside Diesel Filling (spillage, other equipment…). Enter litres OR rupees. DG filling is taken automatically from Diesel Filling.'},
   opening:{l:'Opening Stock',s:'Opening',hint:'Diesel already in hand when you start stock tracking for this site.'},
   tin:{s:'Received'},tout:{s:'Transferred'},filled:{s:'Filled to DG'}
 };
@@ -979,8 +979,8 @@ function stockMoves(sid){
   return out.sort((a,b)=>{const da=dayOf(a.dt),db=dayOf(b.dt);if(da!==db)return da<db?-1:1;if(pr[a.kind]!==pr[b.kind])return pr[a.kind]-pr[b.kind];return a.dt<b.dt?-1:a.dt>b.dt?1:0});
 }
 function stockSum(moves){
-  const t={opening:0,allocation:0,purchase:0,purchaseAmt:0,usage:0,filled:0,tin:0,tout:0,net:0};
-  moves.forEach(m=>{t[m.kind]+=m.qty;if(m.kind==='purchase')t.purchaseAmt+=m.amount||0;t.net+=m.delta});
+  const t={opening:0,allocation:0,purchase:0,purchaseAmt:0,usage:0,usageAmt:0,filled:0,tin:0,tout:0,net:0};
+  moves.forEach(m=>{t[m.kind]+=m.qty;if(m.kind==='purchase')t.purchaseAmt+=m.amount||0;if(m.kind==='usage')t.usageAmt+=m.amount||0;t.net+=m.delta});
   Object.keys(t).forEach(k=>t[k]=r2(t[k]));
   t.used=r2(t.filled+t.usage);t.remainingAlloc=r2(t.allocation-t.used);t.stock=t.net;
   return t;
@@ -1044,7 +1044,7 @@ function bindStockForm(root,sid,rec,onDone){
   const q=n=>root.querySelector(`[data-r="${n}"]`);
   let kind=rec?rec.data.kind:'allocation',mode=rec?.data.mode==='amount'?'amount':'litres';
   function calc(){
-    const isP=kind==='purchase',price=+q('price').value;
+    const isP=kind==='purchase'||kind==='usage',price=+q('price').value;
     q('pricebox').style.visibility=isP?'visible':'hidden';q('modebox').style.display=isP?'':'none';
     q('qtybox').style.display=!isP||mode==='litres'?'':'none';q('amtbox').style.display=isP&&mode==='amount'?'':'none';
     q('khint').textContent=SK[kind].hint;
@@ -1067,10 +1067,11 @@ function bindStockForm(root,sid,rec,onDone){
   return async()=>{
     const v=calc(),day=q('day').value;
     if(!day)return toast('Select a date');
-    if(!(v.qty>0))return toast(kind==='purchase'&&mode==='amount'?'Enter amount and price':'Enter diesel quantity');
-    if(kind==='purchase'&&!(v.price>0))return toast('Enter price per litre');
+    if(!(v.qty>0))return toast((kind==='purchase'||kind==='usage')&&mode==='amount'?'Enter amount and price':'Enter diesel quantity');
+    const priced=kind==='purchase'||kind==='usage';
+    if(priced&&!(v.price>0))return toast('Enter price per litre');
     if(kind==='usage'){const avail=stockOf(sid).stock+(rec&&rec.data.kind==='usage'?+rec.data.qty:0);if(v.qty>avail&&!confirm(`Usage ${v.qty} L is more than available stock (${fmtN(avail,2)} L). Save anyway? Stock will show MINUS.`))return}
-    const data={kind,qty:r2(v.qty),mode:kind==='purchase'?mode:'litres',price:kind==='purchase'?r2(v.price):'',amount:kind==='purchase'?r2(v.amt):'',remarks:q('remarks').value.trim()};
+    const data={kind,qty:r2(v.qty),mode:priced?mode:'litres',price:priced?r2(v.price):'',amount:priced?r2(v.amt):'',remarks:q('remarks').value.trim()};
     const site=siteById(sid);
     let r;
     if(rec){r=rec;r.history=(r.history||[]).concat([{at:Date.now(),user:S.user,dt:r.dt,data:r.data}]);r.dt=dayOf(r.dt)===day?r.dt:dtFor(day);r.data=data;r.editedBy=S.user}
@@ -1124,7 +1125,7 @@ function StockSite(sid){
       ${t.opening?row('Opening stock',fmtL(t.opening)):''}
       ${row('Total company allocated diesel',fmtL(t.allocation))}
       ${row('Actual diesel filled to DG',fmtL(t.filled))}
-      ${t.usage?row('Other usage',fmtL(t.usage)):''}
+      ${t.usage?row('Other usage',`${fmtL(t.usage)} <small style="color:var(--m);font-weight:500">${fmtRs(t.usageAmt)}</small>`):''}
       ${row('Remaining allocated diesel',`<span style="color:${stState(t.remainingAlloc).c}">${fmtL(t.remainingAlloc)}</span>`)}
       ${row('Additional diesel purchased',`${fmtL(t.purchase)} <small style="color:var(--m);font-weight:500">${fmtRs(t.purchaseAmt)}</small>`)}
       ${row('Diesel transferred to other sites',fmtL(t.tout))}
@@ -1137,8 +1138,19 @@ function StockSite(sid){
     <div class="sec-t">Transactions (${list.length})</div>
     <div class="filters"><select class="sel" id="fk" style="grid-column:1/3"><option value="">All transaction types</option>${Object.keys(kl).map(k=>`<option value="${k}" ${STF.kind===k?'selected':''}>${SK[k].s}</option>`).join('')}</select>
       <input class="sel" type="date" id="ff" value="${STF.from}" title="From date"><input class="sel" type="date" id="ft" value="${STF.to}" title="To date"></div>
-    ${list.length?`<div class="scroll"><table class="tbl"><tr><th>Date</th><th>Type</th><th class="r">Litres</th><th class="r">Balance</th></tr>
-      ${list.map(m=>`<tr data-mid="${m.r.id}" data-auto="${m.auto?1:''}" style="cursor:pointer"><td>${fmtD(m.dt)}<br><small style="color:var(--m)">${m.dt.slice(11,16)}</small></td><td><span class="tg ${kc[m.kind]}" style="font-size:9.5px;padding:2px 5px;border-radius:5px;font-weight:800">${kl[m.kind]}</span>${m.kind==='tin'?`<br><small>from ${esc(siteName(m.r.site))}</small>`:m.kind==='tout'?`<br><small>to ${esc(siteName(m.r.data.to))}</small>`:m.kind==='purchase'?`<br><small>${fmtRs(m.amount)}</small>`:''}${m.r.history?.length?' <small style="color:var(--y)">edited</small>':''}</td><td class="r" style="color:${m.delta<0?'var(--r)':'var(--g1)'};font-weight:700">${m.delta<0?'−':'+'}${fmtN(m.qty,2)}</td><td class="r" style="color:${stState(m.bal).c}">${fmtN(m.bal,2)}</td></tr>`).join('')}</table></div>`:'<div class="empty">No transactions yet. Add Opening Stock or Company Allocation above.</div>'}
+    ${list.length?(()=>{
+      const val=m=>isNum(m.amount)&&m.amount>0?{v:m.amount,est:false}:{v:r2(m.qty*priceOn(dayOf(m.dt))),est:true};
+      let inL=0,inR=0,outL=0,outR=0;list.forEach(m=>{const v=val(m).v;if(m.delta>0){inL+=m.qty;inR+=v}else{outL+=m.qty;outR+=v}});
+      const net=r2(inL-outL),sg=x=>x>0.004?'+':x<-0.004?'−':'',col=x=>x>0.004?'var(--g1)':x<-0.004?'var(--r)':'var(--m)';
+      const endBal=list[list.length-1].bal;
+      return `<div class="g2" style="margin-bottom:10px">
+        <div class="cbox c"><h4>DIESEL IN</h4><div class="d" style="color:var(--g1);margin:2px 0 0">+${fmtN(inL,2)} L</div><small style="color:var(--m)">${fmtRs(inR)}</small></div>
+        <div class="cbox" style="background:var(--rl);border:1px solid #f3c2bd"><h4 style="color:var(--r)">DIESEL OUT</h4><div class="d" style="color:var(--r);margin:2px 0 0">−${fmtN(outL,2)} L</div><small style="color:var(--m)">${fmtRs(outR)}</small></div></div>
+      <div class="calc" style="margin:0 0 10px;padding:8px 12px"><div class="l"><span>Net (in − out) ${STF.kind||STF.from||STF.to?'for this filter':''}</span><b style="color:${col(net)}">${sg(net)}${fmtN(Math.abs(net),2)} L</b></div>
+        <div class="l"><span>Balance after last entry</span><b style="color:${col(endBal)}">${sg(endBal)}${fmtN(Math.abs(endBal),2)} L</b></div></div>
+      <div class="scroll"><table class="tbl"><tr><th>Date</th><th>Type</th><th class="r">In / Out</th><th class="r">Balance</th></tr>
+      ${list.map(m=>{const v=val(m);return `<tr data-mid="${m.r.id}" data-auto="${m.auto?1:''}" style="cursor:pointer"><td>${fmtD(m.dt)}<br><small style="color:var(--m)">${m.dt.slice(11,16)}</small></td><td><span class="tg ${kc[m.kind]}" style="font-size:9.5px;padding:2px 5px;border-radius:5px;font-weight:800">${kl[m.kind]}</span>${m.kind==='tin'?`<br><small>from ${esc(siteName(m.r.site))}</small>`:m.kind==='tout'?`<br><small>to ${esc(siteName(m.r.data.to))}</small>`:''}${m.r.history?.length?' <small style="color:var(--y)">edited</small>':''}</td><td class="r"><b style="color:${m.delta<0?'var(--r)':'var(--g1)'}">${m.delta<0?'−':'+'}${fmtN(m.qty,2)} L</b><br><small style="color:var(--m)">${v.est?'≈ ':''}${fmtRs(v.v)}</small></td><td class="r"><b style="color:${col(m.bal)}">${sg(m.bal)}${fmtN(Math.abs(m.bal),2)}</b></td></tr>`}).join('')}</table></div>
+      <div class="hint" style="margin-top:-6px">₹ = amount paid for purchases / usage. Other rows show "≈" value at the diesel price on that date.</div>`})():'<div class="empty">No transactions yet. Add Opening Stock or Company Allocation above.</div>'}
   </div>`,'home');
   const save=bindStockForm($('#sform'),sid,null,r=>{toast(SK[r.data.kind].l+' saved');StockSite(sid)});
   $('#ssave').onclick=save;
@@ -1159,7 +1171,7 @@ function stockDetail(id){
   const hist=(r.history||[]).slice().reverse();
   modal(`<h3>${kindL} · ${esc(siteName(r.site))}</h3>
     <div class="dl"><span>Date</span><b>${fmtDT(r.dt)}</b>${d.kind==='transfer'?`<span>From → To</span><b>${esc(siteName(r.site))} → ${esc(siteName(d.to))}</b>`:''}
-    <span>Quantity</span><b>${fmtL(d.qty)}</b>${d.kind==='purchase'?`<span>Price</span><b>${fmtRs(d.price)} / L</b><span>Amount</span><b>${fmtRs(d.amount)}</b><span>Entered as</span><b>${d.mode==='amount'?'Rupees':'Litres'}</b>`:''}
+    <span>Quantity</span><b>${fmtL(d.qty)}</b>${(d.kind==='purchase'||d.kind==='usage')&&isNum(d.amount)?`<span>Price</span><b>${fmtRs(d.price)} / L</b><span>Amount</span><b>${fmtRs(d.amount)}</b><span>Entered as</span><b>${d.mode==='amount'?'Rupees':'Litres'}</b>`:''}
     <span>Remarks</span><b>${esc(d.remarks||'—')}</b><span>Entered by</span><b>${esc(r.user||'—')}</b>${r.editedBy?`<span>Last edited by</span><b>${esc(r.editedBy)}</b>`:''}</div>
     ${hist.length?`<div class="sec-t">Edit history</div><div class="scroll"><table class="tbl"><tr><th>Changed</th><th>Before</th></tr>${hist.map(h=>`<tr><td>${new Date(h.at).toLocaleString('en-IN',{dateStyle:'short',timeStyle:'short'})}<br><small>${esc(h.user||'')}</small></td><td>${fmtD(h.dt)} · ${fmtL(h.data.qty)}${h.data.amount?' · '+fmtRs(h.data.amount):''}${h.data.to?' → '+esc(siteName(h.data.to)):''}</td></tr>`).join('')}</table></div>`:''}
     <div class="btns"><button class="btn b-r" id="sdel">Delete</button><button class="btn b-b" id="sedit">${I.edit}Edit</button><button class="btn b-gr" onclick="closeModal()">Close</button></div>`);
@@ -1180,7 +1192,7 @@ function dailyRows(sid,day){
 function dailyText(sid,day){
   const {dm,cum,open}=dailyRows(sid,day),st=stState(cum.stock);
   return [`DIESEL STOCK REPORT`,`SITE: ${siteName(sid).toUpperCase()}`,`DATE: ${fmtD(day).replace(/\//g,'-')}`,'',
-    `Opening stock: ${fmtL(open)}`,`Company allocated diesel: ${fmtL(dm.allocation)}`,`Actual diesel filled: ${fmtL(dm.filled)}`,...(dm.usage?[`Other usage: ${fmtL(dm.usage)}`]:[]),
+    `Opening stock: ${fmtL(open)}`,`Company allocated diesel: ${fmtL(dm.allocation)}`,`Actual diesel filled: ${fmtL(dm.filled)}`,...(dm.usage?[`Other usage: ${fmtL(dm.usage)}${dm.usageAmt?` (${fmtRs(dm.usageAmt)})`:''}`]:[]),
     `Remaining allocation (today): ${fmtL(dm.remainingAlloc)}`,`Additional diesel purchased: ${fmtL(dm.purchase)}${dm.purchaseAmt?` (${fmtRs(dm.purchaseAmt)})`:''}`,
     `Diesel received from other sites: ${fmtL(dm.tin)}`,`Diesel transferred out: ${fmtL(dm.tout)}`,'',
     `Total remaining allocation: ${fmtL(cum.remainingAlloc)}`,`Current available stock: ${fmtL(cum.stock)} (${st.t} ${st.sym})`].join('\n');
@@ -1194,7 +1206,7 @@ function dailyReport(sid,day){
       ${R('Opening stock',fmtL(open),'')}
       ${R('Company allocated diesel',fmtL(dm.allocation),fmtL(cum.allocation))}
       ${R('Actual diesel filled',fmtL(dm.filled),fmtL(cum.filled))}
-      ${dm.usage||cum.usage?R('Other usage',fmtL(dm.usage),fmtL(cum.usage)):''}
+      ${dm.usage||cum.usage?R('Other usage',fmtL(dm.usage),fmtL(cum.usage))+R('Usage amount',fmtRs(dm.usageAmt),fmtRs(cum.usageAmt)):''}
       ${R('Remaining allocation',fmtL(dm.remainingAlloc),fmtL(cum.remainingAlloc))}
       ${R('Additional diesel purchased',fmtL(dm.purchase),fmtL(cum.purchase))}
       ${R('Purchase amount',fmtRs(dm.purchaseAmt),fmtRs(cum.purchaseAmt))}
