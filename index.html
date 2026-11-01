@@ -306,7 +306,8 @@ const siteName=id=>(siteById(id)||{}).name||id;
 const DB={db:null,
 open(){return new Promise((res,rej)=>{const r=indexedDB.open('fieldrecord',1);r.onupgradeneeded=()=>r.result.createObjectStore('records',{keyPath:'id'});r.onsuccess=()=>{this.db=r.result;res()};r.onerror=()=>rej(r.error)})},
 all(){return new Promise(res=>{const q=this.db.transaction('records').objectStore('records').getAll();q.onsuccess=()=>res(q.result||[])})},
-put(rec){return new Promise((res,rej)=>{const t=this.db.transaction('records','readwrite');t.objectStore('records').put(rec);t.oncomplete=()=>res();t.onerror=()=>rej(t.error)})}
+put(rec){return new Promise((res,rej)=>{const t=this.db.transaction('records','readwrite');t.objectStore('records').put(rec);t.oncomplete=()=>res();t.onerror=()=>rej(t.error)})},
+del(ids){return new Promise((res,rej)=>{const t=this.db.transaction('records','readwrite');const st=t.objectStore('records');ids.forEach(id=>st.delete(id));t.oncomplete=()=>res();t.onerror=()=>rej(t.error)})}
 };
 let RECS=[];
 const live=()=>RECS.filter(r=>!r.deleted&&r.type!=='config');
@@ -372,9 +373,12 @@ async init(){
     if(this.watching)return;this.watching=true;
     firebase.auth().onAuthStateChanged(async u=>{
       if(u){
-        ACCOUNT={name:u.displayName||'',email:u.email||'',photo:u.photoURL||''};
+        const prevUid=localStorage.getItem('fr_uid');
+        ACCOUNT={uid:u.uid,name:u.displayName||'',email:u.email||'',photo:u.photoURL||''};
         localStorage.setItem('fr_account',JSON.stringify(ACCOUNT));
+        if(prevUid!==u.uid){await this.switchUser(prevUid,u);localStorage.setItem('fr_uid',u.uid)}
         if(!S.user){S.user=ACCOUNT.name;saveS()}
+        if(!localStorage.getItem('fr_migrated_'+u.uid))await this.migrate(u);
         this.ready=true;this.err='';this.needLogin=false;this.listen();await this.push();
         if(location.hash==='#/login')location.hash='#/';else if(!/^#\/(diesel|energy|request|stock)\/|^#\/msg/.test(location.hash))route();
       }else{
@@ -387,16 +391,38 @@ async init(){
   }catch(e){this.err=e.message||String(e);console.warn(e)}
   status();
 },
+/* every Google account has its own private data: users/{uid}/records */
+col(){return this.db.collection('users').doc(firebase.auth().currentUser.uid).collection('records')},
+async switchUser(prevUid,u){
+  // keep only this user's data on the phone
+  const keep=r=>prevUid?false:(r.id==='config-sites'||(r.email&&r.email===u.email)||(!r.email&&PENDING.has(r.id)&&!/^sample-/.test(r.id)));
+  const drop=RECS.filter(r=>!keep(r)).map(r=>r.id);
+  if(drop.length){await DB.del(drop);RECS=RECS.filter(r=>!drop.includes(r.id));drop.forEach(id=>PENDING.delete(id))}
+  RECS.forEach(r=>PENDING.add(r.id));savePending();
+  localStorage.setItem('fr_lastPull','0');
+  if(prevUid){S.user=u.displayName||'';S.phone='';delete S.sitesAt;S.sites=DEFAULT_SITES.map((n,i)=>({id:'s'+(i+1),name:n}));OPS.splice(0,OPS.length,...DEFAULT_OPS);S.operators=OPS.slice();saveS()}
+},
+/* one-time move of this user's entries from the old shared collection */
+async migrate(u){
+  try{
+    const old=await this.db.collection('records').where('email','==',u.email).get();
+    let n=0;
+    for(const d of old.docs){const r=d.data();if(!RECS.find(x=>x.id===r.id)){await DB.put(r);RECS.push(r);PENDING.add(r.id);n++}}
+    if(!RECS.find(r=>r.id==='config-sites')){try{const c=await this.db.collection('records').doc('config-sites').get();if(c.exists){const r=c.data();await DB.put(r);RECS.push(r);PENDING.add(r.id);delete S.sitesAt;applySiteConfig(r);n++}}catch(e){}}
+    savePending();localStorage.setItem('fr_migrated_'+u.uid,'1');
+    if(n)toast(n+' earlier record(s) moved to your account');
+  }catch(e){console.warn('migrate',e);if(!/permission/i.test(e.message))return;localStorage.setItem('fr_migrated_'+u.uid,'1')}
+},
 async login(){
   await this.load();
   const p=new firebase.auth.GoogleAuthProvider();p.setCustomParameters({prompt:'select_account'});
   await firebase.auth().signInWithPopup(p);
 },
-async logout(){if(this.loaded)await firebase.auth().signOut();ACCOUNT=null;localStorage.removeItem('fr_account');location.hash='#/login';route()},
+async logout(){if(this.unsub){this.unsub();this.unsub=null}this.ready=false;if(this.loaded)await firebase.auth().signOut();ACCOUNT=null;localStorage.removeItem('fr_account');location.hash='#/login';route()},
 listen(){
   if(this.unsub)this.unsub();
   const since=+localStorage.getItem('fr_lastPull')||0;
-  this.unsub=this.db.collection('records').where('updatedAt','>',since).onSnapshot(async snap=>{
+  this.unsub=this.col().where('updatedAt','>',since).onSnapshot(async snap=>{
     let changed=false,max=+localStorage.getItem('fr_lastPull')||0;
     for(const c of snap.docChanges()){
       const d=c.doc.data();max=Math.max(max,d.updatedAt||0);
@@ -415,7 +441,7 @@ async push(){
     const ids=[...PENDING];
     for(let i=0;i<ids.length;i+=400){
       const b=this.db.batch();
-      ids.slice(i,i+400).forEach(id=>{const r=RECS.find(x=>x.id===id);if(r)b.set(this.db.collection('records').doc(id),r)});
+      ids.slice(i,i+400).forEach(id=>{const r=RECS.find(x=>x.id===id);if(r)b.set(this.col().doc(id),r)});
       await b.commit();
       ids.slice(i,i+400).forEach(id=>PENDING.delete(id));savePending();
     }

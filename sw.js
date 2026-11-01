@@ -1,5 +1,5 @@
 /* Field Record service worker – offline app shell + CDN library cache */
-const VER='field-record-v8';
+const VER='field-record-v9';
 const SHELL=['./','./index.html','./manifest.json','./icon-192.png','./icon-512.png','./apple-touch-icon.png'];
 const CDN_HOSTS=['cdn.jsdelivr.net','www.gstatic.com','tessdata.projectnaptha.com','unpkg.com'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(VER).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting()))});
