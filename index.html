@@ -176,6 +176,13 @@ textarea.msg[readonly]{background:#f6f9f7}
 .loader{display:flex;align-items:center;gap:10px;justify-content:center;padding:20px;color:var(--m)}
 .loader .spin{border-color:var(--gb);border-top-color:var(--g1);width:22px;height:22px}
 .mt{margin-top:12px}
+.sumsec{border:1px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden}
+.sumsec .sh{font-weight:800;font-size:13.5px;padding:8px 10px}
+.sumsec .tbl td small{color:var(--m);font-size:10.5px}
+.sumsec tr.hl td{background:#fafcfb;font-size:13.5px}
+.sec-c .sh{background:var(--gl);color:var(--g)}.sec-p .sh{background:var(--ol);color:#9a4a00}.sec-s .sh{background:var(--tl);color:var(--tt)}
+.txg{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:13px}
+.txg span{display:block;color:var(--m);font-size:11px}.txg b{font-size:14.5px}.txg small{display:block;color:var(--m);font-size:11px}
 .txc{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:10px;background:#fff;cursor:pointer}
 .txc:active{background:#f6faf8}
 .txh{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
@@ -286,8 +293,9 @@ if(!S.firebase&&!localStorage.getItem('fr_fb_off'))S.firebase=BUILTIN_FIREBASE;
 // add any new default sites missing from stored list (upgrade path)
 if(!S.sitesAt)DEFAULT_SITES.forEach((n,i)=>{const id='s'+(i+1);if(!S.sites.find(s=>s.id===id))S.sites.push({id,name:n})});
 if(Array.isArray(S.operators)&&S.operators.length)OPS.splice(0,OPS.length,...S.operators);
-if(!isNum(S.dieselPrice))S.dieselPrice=101.80;
-if(!Array.isArray(S.priceHistory))S.priceHistory=[{price:101.80,from:'2026-01-01',user:''}];
+if(!isNum(S.dieselPrice)||S.dieselPrice===101.8)S.dieselPrice=100.80;
+if(!Array.isArray(S.priceHistory))S.priceHistory=[{price:100.80,from:'2026-01-01',user:''}];
+S.priceHistory.forEach(p=>{if(p.from==='2026-01-01'&&!p.user&&+p.price===101.8)p.price=100.80});
 if(!Array.isArray(S.petrolHistory))S.petrolHistory=[{price:108.68,from:'2026-01-01',user:''}];
 function saveS(){localStorage.setItem('fr_settings',JSON.stringify(S))}
 saveS();
@@ -306,6 +314,7 @@ function applySiteConfig(rec){
   if(isNum(rec.data.dieselPrice))S.dieselPrice=+rec.data.dieselPrice;
   if(Array.isArray(rec.data.petrolHistory)){const autos=(S.petrolHistory||[]).filter(p=>p.auto&&!rec.data.petrolHistory.some(x=>x.from===p.from));S.petrolHistory=rec.data.petrolHistory.concat(autos)}
   if(rec.data.travel)S.travel=rec.data.travel;
+  if(typeof rec.data.stockAutoFill==='boolean')S.stockAutoFill=rec.data.stockAutoFill;
   if(Array.isArray(rec.data.priceHistory)){const autos=(S.priceHistory||[]).filter(p=>p.auto&&!rec.data.priceHistory.some(x=>x.from===p.from));S.priceHistory=rec.data.priceHistory.concat(autos)}
   saveS();return true;
 }
@@ -313,7 +322,7 @@ function applySiteConfig(rec){
 function freezeSiteOps(){S.sites.forEach(st=>{if(!Array.isArray(st.ops)||!st.ops.length)st.ops=OPS.slice()})}
 const cleanName=t=>String(t||'').trim().replace(/[.#$\[\]\/<>"'`\\]/g,'').slice(0,30);
 async function saveSiteConfig(){
-  const rec={id:'config-sites',type:'config',site:'',siteName:'',dt:nowLocal(),user:S.user,createdAt:Date.now(),deleted:false,data:{sites:JSON.parse(JSON.stringify(S.sites)),operators:OPS.slice(),petrolHistory:S.petrolHistory,travel:S.travel||null,dieselPrice:S.dieselPrice,priceHistory:S.priceHistory},src:{}};
+  const rec={id:'config-sites',type:'config',site:'',siteName:'',dt:nowLocal(),user:S.user,createdAt:Date.now(),deleted:false,data:{sites:JSON.parse(JSON.stringify(S.sites)),operators:OPS.slice(),petrolHistory:S.petrolHistory,travel:S.travel||null,stockAutoFill:!!S.stockAutoFill,dieselPrice:S.dieselPrice,priceHistory:S.priceHistory},src:{}};
   await putRec(rec);S.sitesAt=rec.updatedAt;saveS();
 }
 const siteName=id=>(siteById(id)||{}).name||id;
@@ -508,6 +517,7 @@ function route(){
   if(a==='msg')return MsgPage();
   if(a==='stock')return b?StockSite(b):StockHome();
   if(a==='stockreport')return StockReport();
+  if(a==='stocktx')return StockAllTx();
   if(a==='travel')return TravelPage();
   if(a==='dash')return Dashboard();
   if(a==='history')return History();
@@ -972,17 +982,20 @@ function MsgPage(){
 }
 
 /* ================= DIESEL STOCK MANAGEMENT ================= */
-/* Independent module. Never changes Diesel Filling records; only READS their "Diesel Filled" litres as usage.
-   PHYSICAL STOCK  = Opening balance + Purchased + Received − Filled to DG − Other usage − Transferred out
-   DIFFERENCE      = Allocated − Purchased   (litres and ₹, kept separate from physical stock)          */
+/* Independent module with THREE separate balances:
+   1. Company allocation balance = Allocated − Purchased            (− = you bought more than allocated)
+   2. Personally funded diesel    = Purchased − Allocated (if more)  (paid from your own money)
+   3. Physical stock              = Balance set + Purchased + Received − Filled − Transferred out
+      split into company-funded stock and personally-funded stock (fills use company diesel first). */
 const SK={
-  allocation:{l:'Company Allocation',s:'Allocated',hint:'Diesel allowed by the company. Enter litres — the value is calculated from the price. It is compared with what you purchase; it does not change physical stock.'},
-  purchase:{l:'Purchase',s:'Purchased',hint:'Diesel actually bought. Enter litres OR rupees — the other is calculated. Adds to physical stock.'},
-  usage:{l:'Other Usage',s:'Used',hint:'Diesel used outside Diesel Filling (spillage, other equipment…). Enter litres OR rupees. DG filling is taken automatically from Diesel Filling.'},
-  opening:{l:'Opening Balance',s:'Opening',hint:'Sets the physical stock to this value — 0 and minus are allowed. Use it to start, or to correct the balance after a physical check.'},
-  tin:{s:'Received'},tout:{s:'Transferred'},filled:{s:'Filled to DG'}
+  allocation:{l:'Allocated',s:'Allocated',hint:'Diesel allocated by the company for this site. Enter litres OR rupees. It is the company budget — it does not add to physical stock.'},
+  purchase:{l:'Purchased',s:'Purchased',hint:'Diesel actually bought. Paid from company allocation first; anything above the allocation is counted as your own money. Adds to physical stock.'},
+  fill:{l:'Filled',s:'Filled',hint:'Diesel filled into the DG. Enter litres OR rupees. Reduces physical stock.'},
+  opening:{l:'Balance',s:'Balance',hint:'Sets the physical stock to this value (0 and minus allowed). Use it to start, or after checking the stock physically.'},
+  usage:{l:'Filled',s:'Filled'},tin:{s:'Received'},tout:{s:'Transferred'},filled:{s:'Filled (Diesel Filling)'}
 };
-const PRICED=['allocation','purchase','usage'],TWO_WAY=['purchase','usage'];
+const TABS=['allocation','purchase','fill','opening'];
+const FILLK=['fill','usage','filled'];
 const fmtRs=v=>isNum(v)?'₹'+(+v).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';
 const fmtL=v=>fmtN(v,2)+' L';
 const sgn=v=>v>0.004?'+':v<-0.004?'−':'';
@@ -991,59 +1004,84 @@ const sL=v=>`<span style="color:${colr(v)};font-weight:700">${sgn(v)}${fmtN(Math
 const sR=v=>`<span style="color:${colr(v)};font-weight:700">${sgn(v)}${fmtRs(Math.abs(v))}</span>`;
 const tL=v=>`${sgn(v)}${fmtN(Math.abs(v),2)} L`,tR=v=>`${sgn(v)}${fmtRs(Math.abs(v))}`;
 const stockRecs=()=>live().filter(r=>r.type==='stock');
-function priceOn(day){const h=(S.priceHistory||[]).filter(p=>p.from<=day).sort((a,b)=>a.from<b.from?-1:a.from>b.from?1:((a.auto?0:1)-(b.auto?0:1))||((a.at||0)-(b.at||0)));return h.length?+h[h.length-1].price:+S.dieselPrice}
+function priceOn(day){const h=(S.priceHistory||[]).filter(p=>p.from<=day).sort((a,b)=>a.from<b.from?-1:a.from>b.from?1:((a.auto?0:1)-(b.auto?0:1))||((a.at||0)-(b.at||0)));return h.length?+h[h.length-1].price:+(S.dieselPrice||100.80)}
+const autoFillOn=()=>S.stockAutoFill===true;
 function stockStart(sid){const st=siteById(sid)||{};if(st.stockStart)return st.stockStart;const ds=stockRecs().filter(r=>r.site===sid||r.data.to===sid).map(r=>dayOf(r.dt)).sort();return ds[0]||''}
-/* full ledger for a site, with running opening/closing balance and running difference */
+/* derive the three balances from cumulative totals */
+function derive(t){
+  t.compBalL=r2(t.allocation-t.purchase);t.compBalR=r2(t.allocAmt-t.purchaseAmt);
+  t.persL=r2(Math.max(0,t.purchase-t.allocation));t.persR=r2(Math.max(0,t.purchaseAmt-t.allocAmt));
+  t.compPurchL=r2(Math.min(t.purchase,t.allocation));t.compPurchR=r2(Math.min(t.purchaseAmt,t.allocAmt));
+  t.stock=r2(t.adj+t.purchase+t.tin-t.filled-t.tout);
+  const avail=t.adj+t.compPurchL+t.tin,out=t.filled+t.tout,fromC=Math.min(out,Math.max(0,avail));
+  t.compStock=r2(avail-fromC);t.persStock=r2(t.persL-(out-fromC));
+  return t;
+}
+const zeroT=()=>({adj:0,allocation:0,allocAmt:0,purchase:0,purchaseAmt:0,filled:0,filledAmt:0,tin:0,tout:0,n:0});
+function addMove(t,m){
+  t.n++;
+  if(m.kind==='opening')t.adj+=m.delta;
+  else if(m.kind==='allocation'){t.allocation+=m.qty;t.allocAmt+=m.amount}
+  else if(m.kind==='purchase'){t.purchase+=m.qty;t.purchaseAmt+=m.amount}
+  else if(FILLK.includes(m.kind)){t.filled+=m.qty;t.filledAmt+=m.amount}
+  else if(m.kind==='tin')t.tin+=m.qty;else if(m.kind==='tout')t.tout+=m.qty;
+}
+/* full ledger for one site with running balances */
 function stockMoves(sid){
   const out=[];
   stockRecs().forEach(r=>{const d=r.data,q=+d.qty||0;
-    if(d.kind==='transfer'){if(r.site===sid)out.push({r,dt:r.dt,kind:'tout',qty:q});if(d.to===sid)out.push({r,dt:r.dt,kind:'tin',qty:q});return}
+    if(d.kind==='transfer'){if(r.site===sid)out.push({r,dt:r.dt,kind:'tout',qty:q,amount:null,price:null});if(d.to===sid)out.push({r,dt:r.dt,kind:'tin',qty:q,amount:null,price:null});return}
     if(r.site!==sid)return;
     out.push({r,dt:r.dt,kind:d.kind,qty:q,amount:isNum(d.amount)?+d.amount:null,price:isNum(d.price)?+d.price:null});
   });
   const start=stockStart(sid);
-  if(start)recsOf(sid,'diesel').forEach(r=>{const q=+r.data.filled||0;if(q>0&&dayOf(r.dt)>=start)out.push({r,dt:r.dt,kind:'filled',qty:q,auto:true,amount:null,price:null})});
-  const pr={opening:0,allocation:1,purchase:2,tin:3,filled:4,usage:5,tout:6};
-  // an Opening Balance applies from the moment it was entered; other same-day entries are grouped (in before out)
+  if(autoFillOn()&&start)recsOf(sid,'diesel').forEach(r=>{const q=+r.data.filled||0;if(q>0&&dayOf(r.dt)>=start)out.push({r,dt:r.dt,kind:'filled',qty:q,auto:true,amount:null,price:null})});
+  const pr={opening:0,allocation:1,purchase:2,tin:3,filled:4,fill:4,usage:5,tout:6};
   const key=m=>m.dt+'|'+String(m.r.createdAt||0).padStart(15,'0');
   const opens=out.filter(m=>m.kind==='opening').map(key).sort();
   out.forEach(m=>{const d=dayOf(m.dt),k=key(m);m.seg=opens.filter(o=>o.slice(0,10)===d&&o<=k).length});
   out.sort((a,b)=>{const da=dayOf(a.dt),db=dayOf(b.dt);if(da!==db)return da<db?-1:1;if(a.seg!==b.seg)return a.seg-b.seg;if(pr[a.kind]!==pr[b.kind])return pr[a.kind]-pr[b.kind];return key(a)<key(b)?-1:key(a)>key(b)?1:0});
-  let bal=0,dL=0,dR=0;
+  const t=zeroT();let bal=0;
   out.forEach(m=>{
     const p=m.price||priceOn(dayOf(m.dt));m.p=p;
     m.est=m.amount==null;if(m.est)m.amount=r2(m.qty*p);
     m.open=bal;
-    m.delta=m.kind==='opening'?r2(m.qty-bal):['purchase','tin'].includes(m.kind)?m.qty:['usage','filled','tout'].includes(m.kind)?-m.qty:0;
-    bal=r2(bal+m.delta);m.bal=m.close=bal;
-    if(m.kind==='allocation'){dL+=m.qty;dR+=m.amount}
-    if(m.kind==='purchase'){dL-=m.qty;dR-=m.amount}
-    m.diffL=r2(dL);m.diffR=r2(dR);
+    m.delta=m.kind==='opening'?r2(m.qty-bal):['purchase','tin'].includes(m.kind)?m.qty:(FILLK.includes(m.kind)||m.kind==='tout')?-m.qty:0;
+    bal=r2(bal+m.delta);
+    addMove(t,m);const d=derive({...t});
+    Object.assign(m,{bal:d.stock,close:d.stock,compBalL:d.compBalL,compBalR:d.compBalR,persL:d.persL,persStock:d.persStock,compStock:d.compStock});
   });
   return out;
 }
-function stockSum(moves){
-  const t={adj:0,allocation:0,allocAmt:0,purchase:0,purchaseAmt:0,usage:0,usageAmt:0,filled:0,filledAmt:0,tin:0,tout:0,net:0};
-  moves.forEach(m=>{
-    if(m.kind==='opening')t.adj+=m.delta;else t[m.kind]+=m.qty;
-    if(m.kind==='allocation')t.allocAmt+=m.amount;
-    if(m.kind==='purchase')t.purchaseAmt+=m.amount;
-    if(m.kind==='usage')t.usageAmt+=m.amount;
-    if(m.kind==='filled')t.filledAmt+=m.amount;
-    t.net+=m.delta});
-  Object.keys(t).forEach(k=>t[k]=r2(t[k]));
-  t.used=r2(t.filled+t.usage);t.usedAmt=r2(t.filledAmt+t.usageAmt);
-  t.diffL=r2(t.allocation-t.purchase);t.diffR=r2(t.allocAmt-t.purchaseAmt);
-  t.inL=r2(t.purchase+t.tin);t.outL=r2(t.used+t.tout);t.stock=t.net;
-  return t;
-}
+function stockSum(moves){const t=zeroT();moves.forEach(m=>addMove(t,m));Object.keys(t).forEach(k=>t[k]=r2(t[k]));derive(t);t.inL=r2(t.purchase+t.tin);t.outL=r2(t.filled+t.tout);return t}
 const movesBetween=(sid,from,to,all)=>(all||stockMoves(sid)).filter(m=>{const d=dayOf(m.dt);return(!from||d>=from)&&(!to||d<=to)});
 const stockOf=(sid,upto)=>stockSum(movesBetween(sid,'',upto));
+/* add site summaries together (personal funding is per site, so sum the site values) */
+function sumSites(list){const T={};['allocation','allocAmt','purchase','purchaseAmt','filled','filledAmt','compPurchL','compPurchR','compBalL','compBalR','persL','persR','stock','compStock','persStock','tin','tout','adj'].forEach(k=>T[k]=r2(list.reduce((s,t)=>s+(t[k]||0),0)));return T}
 function stState(v){return v>0.004?{t:'PLUS',sym:'+',c:'var(--g1)',bg:'var(--gl)'}:v<-0.004?{t:'MINUS',sym:'−',c:'var(--r)',bg:'var(--rl)'}:{t:'ZERO',sym:'0',c:'var(--m)',bg:'#eef1ef'}}
 function stBadge(v,big){const s=stState(v);return `<span class="badge" style="background:${s.bg};color:${s.c};${big?'font-size:12px;padding:4px 10px':''}">${s.t} ${s.sym}</span>`}
 const today=()=>dayOf(nowLocal());
 function dtFor(day){const n=nowLocal();return day===dayOf(n)?n:day+'T'+n.slice(11,16)}
 
+/* three-section summary block (company / own money / physical) */
+function summaryHTML(t,price){
+  const R=(l,L,A,cls='')=>`<tr class="${cls}"><td>${l}</td><td class="r">${L}</td><td class="r">${A}</td></tr>`;
+  return `<div class="sumsec sec-c"><div class="sh">🏢 Company Allocation</div><table class="tbl"><tr><th></th><th class="r">Litres</th><th class="r">Amount</th></tr>
+      ${R('Allocated by company',fmtL(t.allocation),fmtRs(t.allocAmt))}
+      ${R('Purchased from allocation',fmtL(t.compPurchL),fmtRs(t.compPurchR))}
+      ${R('<b>Company allocation balance</b><br><small>allocated − purchased</small>',sL(t.compBalL),sR(t.compBalR),'hl')}</table></div>
+    <div class="sumsec sec-p"><div class="sh">👤 My Own Money</div><table class="tbl"><tr><th></th><th class="r">Litres</th><th class="r">Amount</th></tr>
+      ${R('Personally funded diesel<br><small>purchased above allocation</small>',`<span style="color:${t.persL>0.004?'var(--r)':'var(--m)'};font-weight:700">${fmtL(t.persL)}</span>`,`<span style="color:${t.persR>0.004?'var(--r)':'var(--m)'};font-weight:700">${fmtRs(t.persR)}</span>`,'hl')}
+      ${R('Personally funded stock remaining',sL(t.persStock),'≈ '+tR(r2(t.persStock*price)))}</table></div>
+    <div class="sumsec sec-s"><div class="sh">🛢️ Physical Diesel Stock</div><table class="tbl"><tr><th></th><th class="r">Litres</th><th class="r">Amount</th></tr>
+      ${t.adj?R('Balance set / adjusted',sL(t.adj),''):''}
+      ${R('Purchased (total)',fmtL(t.purchase),fmtRs(t.purchaseAmt))}
+      ${R('Filled',fmtL(t.filled),fmtRs(t.filledAmt))}
+      ${t.tin||t.tout?R('Received / transferred out',`${fmtN(t.tin,2)} / ${fmtN(t.tout,2)} L`,''):''}
+      ${R('<b>Available physical stock</b>',sL(t.stock),'≈ '+tR(r2(t.stock*price)),'hl')}
+      ${R('<small>of which company-funded</small>',`<small>${tL(t.compStock)}</small>`,'')}
+      ${R('<small>of which own-money</small>',`<small>${tL(t.persStock)}</small>`,'')}</table></div>`;
+}
 /* ---------- daily diesel price (Kanyakumari) from price.json made by the GitHub job ---------- */
 function priceUrls(){
   const u=[];const m=location.hostname.match(/^([^.]+)\.github\.io$/);const repo=location.pathname.split('/').filter(Boolean)[0];
@@ -1079,96 +1117,107 @@ async function autoPrice(force){
   return null;
 }
 
-/* ---------- stock home ---------- */
+/* ---------- stock home: overall summary ---------- */
 let STQ='';
 function StockHome(){
   autoPrice();
+  const pNow=priceOn(today());
   const rows=activeSites().map((s,i)=>({s,i,t:stockOf(s.id)}));
-  const T=rows.reduce((a,x)=>{['allocation','allocAmt','purchase','purchaseAmt','used','stock','diffL','diffR'].forEach(k=>a[k]=r2((a[k]||0)+x.t[k]));return a},{});
-  const ai=S.autoInfo;
+  const T=sumSites(rows.map(r=>r.t));const ai=S.autoInfo;
   render(header('Diesel Stock','#/')+`<div class="wrap">
     <div class="tiles">
-      <div class="tile" style="background:var(--gl)"><div class="ti" style="background:var(--g1)">${I.fuel}</div><div><span>Allocated</span><b>${fmtN(T.allocation,1)} L</b><small style="display:block;color:var(--m)">${fmtRs(T.allocAmt)}</small></div></div>
-      <div class="tile" style="background:var(--ol)"><div class="ti" style="background:var(--o)">₹</div><div><span>Purchased</span><b>${fmtN(T.purchase,1)} L</b><small style="display:block;color:var(--m)">${fmtRs(T.purchaseAmt)}</small></div></div>
-      <div class="tile" style="background:${stState(T.diffL).bg}"><div class="ti" style="background:${colr(T.diffL)}">±</div><div><span>Difference</span><b>${sL(T.diffL)}</b><small style="display:block">${sR(T.diffR)}</small></div></div>
-      <div class="tile" style="background:var(--tl)"><div class="ti" style="background:var(--tt)">${I.barrel}</div><div><span>Physical Stock</span><b>${sL(T.stock)}</b><small style="display:block;color:var(--m)">Used ${fmtN(T.used,1)} L</small></div></div>
+      <div class="tile" style="background:var(--gl)"><div class="ti" style="background:var(--g1)">🏢</div><div><span>Company balance</span><b>${sL(T.compBalL)}</b><small style="display:block">${sR(T.compBalR)}</small></div></div>
+      <div class="tile" style="background:var(--ol)"><div class="ti" style="background:var(--o)">👤</div><div><span>My own money</span><b style="color:${T.persL>0?'var(--r)':'inherit'}">${fmtN(T.persL,1)} L</b><small style="display:block;color:var(--m)">${fmtRs(T.persR)}</small></div></div>
+      <div class="tile" style="background:var(--bl)"><div class="ti" style="background:var(--b)">${I.fuel}</div><div><span>Filled</span><b>${fmtN(T.filled,1)} L</b><small style="display:block;color:var(--m)">${fmtRs(T.filledAmt)}</small></div></div>
+      <div class="tile" style="background:var(--tl)"><div class="ti" style="background:var(--tt)">${I.barrel}</div><div><span>Physical stock</span><b>${sL(T.stock)}</b><small style="display:block;color:var(--m)">≈ ${tR(r2(T.stock*pNow))}</small></div></div>
     </div>
-    <div class="btns" style="margin:0 0 10px"><button class="btn b-t" onclick="openTransfer()">${I.swap}Transfer</button><button class="btn b-g" onclick="location.hash='#/stockreport'">${I.hist}Monthly Report</button></div>
-    <button class="rec" onclick="editPrice()" style="margin-bottom:12px"><span class="tg" style="background:var(--ol);color:#b65400">PRICE</span><span class="mid"><b>Diesel ${fmtRs(priceOn(today()))} / L today</b><small>${S.autoPrice===false?'Auto update OFF · manual price':ai?`Auto · Kanyakumari ${fmtD(ai.date)} · ${esc(ai.source)}`:'Auto update on · waiting for price'}</small></span><span class="ar" style="width:18px;color:#9aa6a0">${I.chev}</span></button>
+    <div class="sec-t">Overall summary – all ${activeSites().length} sites</div>
+    ${summaryHTML(T,pNow)}
+    <div class="btns" style="margin:4px 0 10px"><button class="btn b-t" onclick="openTransfer()">${I.swap}Transfer</button><button class="btn b-g" onclick="location.hash='#/stockreport'">${I.hist}Monthly Report</button></div>
+    <button class="btn b-gr" style="width:100%;margin-bottom:10px" onclick="location.hash='#/stocktx'">${I.hist}All Transactions (all sites)</button>
+    <button class="rec" onclick="editPrice()" style="margin-bottom:8px"><span class="tg" style="background:var(--ol);color:#b65400">PRICE</span><span class="mid"><b>Diesel ${fmtRs(pNow)} / L today</b><small>${S.autoPrice===false?'Auto update OFF · manual price':ai?`Auto · Kanyakumari ${fmtD(ai.date)} · ${esc(ai.source)}`:'Default price · auto update on'}</small></span><span class="ar" style="width:18px;color:#9aa6a0">${I.chev}</span></button>
+    <button class="rec" onclick="stockSettings()" style="margin-bottom:12px"><span class="tg tg-stock">FILLED</span><span class="mid"><b>${autoFillOn()?'Also counting Diesel Filling entries':'Filled = entries made here only'}</b><small>Tap to change</small></span><span class="ar" style="width:18px;color:#9aa6a0">${I.chev}</span></button>
+    <div class="sec-t">Site-wise</div>
     <input class="sel" id="stq" placeholder="Search site…" value="${esc(STQ)}" style="margin-bottom:6px">
   </div>
-  <ul class="slist acc-t" id="stl">${rows.map(({s,i,t})=>`<li data-n="${esc(s.name.toLowerCase())}"><a href="#/stock/${s.id}"><span class="num">${i+1}</span><span class="nm"><b>${esc(s.name)}</b><small>Alloc ${fmtN(t.allocation,1)} · Bought ${fmtN(t.purchase,1)} · Diff ${tL(t.diffL)}</small></span><span style="text-align:right">${sL(t.stock)}<br>${stBadge(t.stock)}</span></a></li>`).join('')}</ul>`,'home');
+  <ul class="slist acc-t" id="stl">${rows.map(({s,i,t})=>`<li data-n="${esc(s.name.toLowerCase())}"><a href="#/stock/${s.id}"><span class="num">${i+1}</span><span class="nm"><b>${esc(s.name)}</b><small>Company ${tL(t.compBalL)} · Own ${fmtN(t.persL,1)} L · Filled ${fmtN(t.filled,1)} L</small></span><span style="text-align:right">${sL(t.stock)}<br><small style="color:var(--m)">stock</small></span></a></li>`).join('')}</ul>`,'home');
   const f=()=>{STQ=$('#stq').value.trim().toLowerCase();$$('#stl li').forEach(li=>li.style.display=!STQ||li.dataset.n.includes(STQ)?'':'none')};
   $('#stq').oninput=f;f();
+}
+function stockSettings(){
+  modal(`<h3>Filled diesel</h3>
+    <label style="display:flex;gap:10px;align-items:flex-start;font-size:14px;margin-bottom:10px"><input type="radio" name="saf" value="0" ${autoFillOn()?'':'checked'} style="width:20px;height:20px;margin-top:2px"><span><b>Only “Filled” entries made here</b> (recommended)<br><small style="color:var(--m)">Stock is kept completely separate from the Diesel Filling module.</small></span></label>
+    <label style="display:flex;gap:10px;align-items:flex-start;font-size:14px"><input type="radio" name="saf" value="1" ${autoFillOn()?'checked':''} style="width:20px;height:20px;margin-top:2px"><span><b>Also count “Diesel Filled” from the Diesel Filling module</b><br><small style="color:var(--m)">Use this only if you do NOT enter the same fill again here — otherwise it is counted twice.</small></span></label>
+    <div class="btns"><button class="btn b-gr" onclick="closeModal()">Cancel</button><button class="btn b-g" id="safs">${I.save}Save</button></div>`);
+  $('#safs').onclick=async()=>{S.stockAutoFill=document.querySelector('[name=saf]:checked').value==='1';saveS();await saveSiteConfig();closeModal();toast('Saved');route()};
 }
 
 /* ---------- price ---------- */
 function editPrice(){
-  const h=(S.priceHistory||[]).slice().sort((a,b)=>a.from<b.from?1:a.from>b.from?-1:(b.at||0)-(a.at||0)).slice(0,60);
-  const ai=S.autoInfo;
+  const h=(S.priceHistory||[]).slice().sort((a,b)=>a.from<b.from?1:a.from>b.from?-1:(b.at||0)-(a.at||0)).slice(0,60);const ai=S.autoInfo;
   modal(`<h3>Diesel Price</h3>
-    <div class="calc" style="margin-top:0">
-      <div class="l"><span>Today's price used</span><b>${fmtRs(priceOn(today()))} / L</b></div>
+    <div class="calc" style="margin-top:0"><div class="l"><span>Today's price used</span><b>${fmtRs(priceOn(today()))} / L</b></div>
       <div class="l"><span>Auto (Kanyakumari district)</span><b>${ai?`${fmtRs(ai.price)} · ${fmtD(ai.date)}`:'—'}</b></div>
       ${ai?`<div class="hint" style="margin:2px 0 0">Source: ${esc(ai.source)}${ai.confirmed?' · confirmed by 2 sources':''}</div>`:''}
-    </div>
+      <div class="hint" style="margin:2px 0 0">Default price when nothing else is set: ₹100.80 / L</div></div>
     <label style="display:flex;align-items:center;gap:8px;font-size:14px;margin:0 0 6px"><input type="checkbox" id="pauto" ${S.autoPrice===false?'':'checked'} style="width:20px;height:20px"> Update price automatically every day</label>
     <button class="btn b-gr" id="pchk" style="width:100%;margin-bottom:12px">${I.sync}Check today's price now</button>
     <div class="sec-t">Manual price</div>
     <div class="g2"><div class="setf"><label>Price (₹ / L)</label><input class="sel" id="pp" type="number" step="0.01" inputmode="decimal" value="${priceOn(today())}"></div>
     <div class="setf"><label>Effective from</label><input class="sel" id="pd" type="date" value="${today()}"></div></div>
-    <div class="hint">A manual price for a date always wins over the auto price for that date. Saved transactions keep their own price.</div>
+    <div class="hint">A manual price for a date always wins over the auto price. Saved transactions keep their own price.</div>
     <div class="btns"><button class="btn b-gr" onclick="closeModal()">Close</button><button class="btn b-g" id="psave">${I.save}Save Manual Price</button></div>
     <div class="sec-t mt">Price History</div>
-    <div class="scroll"><table class="tbl"><tr><th>From</th><th class="r">₹ / L</th><th>By</th></tr>${h.map(p=>`<tr><td>${fmtD(p.from)}</td><td class="r">${fmtN(p.price,2)}</td><td>${esc(p.user||'—')}</td></tr>`).join('')}</table></div>`);
-  $('#pauto').onchange=e=>{S.autoPrice=e.target.checked;saveS();if(S.autoPrice)autoPrice(true).then(()=>{editPrice()});toast(S.autoPrice?'Auto price ON':'Auto price OFF')};
-  $('#pchk').onclick=async()=>{if(S.autoPrice===false)return toast('Turn on auto update first');$('#pchk').disabled=true;const r=await autoPrice(true);toast(r?`Kanyakumari: ${fmtRs(r.price)} (${fmtD(r.date)})`:'Could not get price — check internet or GitHub job');editPrice()};
+    <div class="scroll"><table class="tbl"><tr><th>From</th><th class="r">₹ / L</th><th>By</th></tr>${h.map(p=>`<tr><td>${fmtD(p.from)}</td><td class="r">${fmtN(p.price,2)}</td><td>${esc(p.user||'Default')}</td></tr>`).join('')}</table></div>`);
+  $('#pauto').onchange=e=>{S.autoPrice=e.target.checked;saveS();if(S.autoPrice)autoPrice(true).then(()=>editPrice());toast(S.autoPrice?'Auto price ON':'Auto price OFF')};
+  $('#pchk').onclick=async()=>{if(S.autoPrice===false)return toast('Turn on auto update first');$('#pchk').disabled=true;const r=await autoPrice(true);toast(r?`Kanyakumari: ${fmtRs(r.price)} (${fmtD(r.date)})`:'Could not get price');editPrice()};
   $('#psave').onclick=async()=>{const p=+$('#pp').value,d=$('#pd').value;if(!(p>0))return toast('Enter a valid price');if(!d)return toast('Select a date');
     S.priceHistory=(S.priceHistory||[]).filter(x=>!(x.from===d&&!x.auto)).concat([{price:r2(p),from:d,user:S.user||'Manual',at:Date.now()}]);S.dieselPrice=priceOn(today());saveS();await saveSiteConfig();closeModal();toast('Price saved');route()};
 }
 
-/* ---------- entry form (used inline and for edits) ---------- */
+/* ---------- entry form: 4 tabs, each with Litres / Amount ₹ ---------- */
 function stockFormHTML(kind,val){
   val=val||{};const day=val.day||today();
-  return `<div class="tabs" data-r="kinds">${['allocation','purchase','usage','opening'].map(k=>`<button data-kind="${k}" class="${k===kind?'on':''}">${SK[k].s}</button>`).join('')}</div>
+  return `<div class="tabs" data-r="kinds">${TABS.map(k=>`<button data-kind="${k}" class="${k===kind?'on':''}">${SK[k].s}</button>`).join('')}</div>
   <div class="hint" data-r="khint" style="margin:-4px 0 8px"></div>
   <div class="calc" data-r="prev" style="margin:0 0 10px;padding:8px 12px"></div>
   <div class="g2"><div class="field"><div class="lbl">Date</div><input class="inp sm" type="date" data-r="day" value="${day}" max="${today()}"></div>
-  <div class="field" data-r="pricebox"><div class="lbl">Price ₹ / L</div><input class="inp sm" type="number" step="0.01" inputmode="decimal" data-r="price" value="${val.price??priceOn(day)}"></div></div>
-  <div data-r="modebox"><div class="tabs" style="margin-bottom:10px"><button data-mode="litres" class="${val.mode!=='amount'?'on':''}">Enter Litres</button><button data-mode="amount" class="${val.mode==='amount'?'on':''}">Enter Amount ₹</button></div></div>
-  <div class="field" data-r="qtybox"><div class="lbl" data-r="qtylbl">Diesel quantity (L)</div><input class="inp" type="number" step="any" inputmode="decimal" data-r="qty" value="${val.qty??''}" placeholder="Litres"></div>
-  <div class="field" data-r="amtbox"><div class="lbl">Amount (₹)</div><input class="inp" type="number" step="any" inputmode="decimal" data-r="amount" value="${val.amount??''}" placeholder="Rupees"></div>
-  <div class="calc" data-r="calc" style="display:none"></div>
+  <div class="field"><div class="lbl">Price ₹ / L</div><input class="inp sm" type="number" step="0.01" inputmode="decimal" data-r="price" value="${val.price??priceOn(day)}"></div></div>
+  <div class="tabs" style="margin-bottom:10px"><button data-mode="litres" class="${val.mode!=='amount'?'on':''}">Enter Litres</button><button data-mode="amount" class="${val.mode==='amount'?'on':''}">Enter Amount ₹</button></div>
+  <div class="field" data-r="qtybox"><div class="lbl" data-r="qtylbl">Litres</div><input class="inp" type="number" step="any" inputmode="decimal" data-r="qty" value="${val.qty??''}" placeholder="Litres"></div>
+  <div class="field" data-r="amtbox"><div class="lbl" data-r="amtlbl">Amount (₹)</div><input class="inp" type="number" step="any" inputmode="decimal" data-r="amount" value="${val.amount??''}" placeholder="Rupees"></div>
+  <div class="calc" data-r="calc"></div>
   <div class="field"><div class="lbl">Remarks</div><input class="inp sm" data-r="remarks" value="${esc(val.remarks||'')}" placeholder="Optional"></div>`;
 }
 function bindStockForm(root,sid,rec,onDone){
   const q=n=>root.querySelector(`[data-r="${n}"]`);
-  let kind=rec?rec.data.kind:'allocation',mode=rec?.data.mode==='amount'?'amount':'litres';
-  const prevBal=()=>{if(rec){const m=stockMoves(sid).find(x=>x.r===rec);if(m)return {bal:m.open,diff:r2(m.diffL-(m.kind==='allocation'?m.qty:m.kind==='purchase'?-m.qty:0))}}
-    const t=stockOf(sid,q('day').value||today());return {bal:t.stock,diff:t.diffL}};
+  let kind=rec?(rec.data.kind==='usage'?'fill':rec.data.kind):'allocation',mode=rec?.data.mode==='amount'?'amount':'litres';
+  const before=()=>{
+    const all=stockMoves(sid);
+    if(rec){const i=all.findIndex(x=>x.r===rec);if(i>0)return derive(stockSum(all.slice(0,i)));if(i===0)return derive(stockSum([]))}
+    return stockSum(movesBetween(sid,'',q('day').value||today(),all));
+  };
   function calc(){
-    const priced=PRICED.includes(kind),two=TWO_WAY.includes(kind),price=+q('price').value;
-    q('pricebox').style.visibility=priced?'visible':'hidden';q('modebox').style.display=two?'':'none';
-    const useAmt=two&&mode==='amount';
+    const price=+q('price').value,useAmt=mode==='amount',bal=kind==='opening';
     q('qtybox').style.display=useAmt?'none':'';q('amtbox').style.display=useAmt?'':'none';
-    q('qtylbl').textContent=kind==='opening'?'Opening balance (L) — 0 or minus allowed':'Diesel quantity (L)';
-    q('qty').placeholder=kind==='opening'?'e.g. 0, 25 or -10':'Litres';
+    q('qtylbl').textContent=bal?'New balance (L) — 0 or minus allowed':'Litres';
+    q('amtlbl').textContent=bal?'New balance value (₹) — 0 or minus allowed':'Amount (₹)';
     q('khint').textContent=SK[kind].hint;
     root.querySelectorAll('[data-kind]').forEach(b=>b.classList.toggle('on',b.dataset.kind===kind));
     root.querySelectorAll('[data-mode]').forEach(b=>b.classList.toggle('on',b.dataset.mode===mode));
-    const pb=prevBal();
-    q('prev').innerHTML=`<div class="l"><span>Previous closing balance</span><b>${sL(pb.bal)}</b></div><div class="l"><span>Allocated − purchased so far</span><b>${sL(pb.diff)}</b></div>`;
-    const c=q('calc');
-    if(priced){
-      let qty,amt;
-      if(useAmt){amt=+q('amount').value;qty=amt&&price?r2(amt/price):0}else{qty=+q('qty').value;amt=qty&&price?r2(qty*price):0}
-      const after=kind==='purchase'?r2(pb.bal+(qty||0)):kind==='usage'?r2(pb.bal-(qty||0)):pb.bal;
-      c.style.display='';c.innerHTML=`<div class="l"><span>Quantity</span><b>${fmtL(qty||0)}</b></div><div class="l"><span>Price</span><b>${fmtRs(price||0)} / L</b></div><div class="l"><span>${kind==='allocation'?'Allocation value':'Amount'}</span><b>${fmtRs(amt||0)}</b></div><div class="l tot"><span>Closing balance after this</span><b>${sL(after)}</b></div>`;
-      return {qty,amt,price};
-    }
-    const v=q('qty').value;
-    if(kind==='opening'&&v!==''&&isNum(v)){c.style.display='';c.innerHTML=`<div class="l"><span>Balance changes by</span><b>${sL(r2(+v-pb.bal))}</b></div><div class="l tot"><span>New closing balance</span><b>${sL(+v)}</b></div>`}else c.style.display='none';
-    return {qty:v===''?NaN:+v,amt:0,price:0};
+    const B=before();
+    q('prev').innerHTML=`<div class="l"><span>Physical stock now</span><b>${sL(B.stock)}</b></div><div class="l"><span>Company allocation balance</span><b>${sL(B.compBalL)}</b></div>`;
+    const qv=q('qty').value,av=q('amount').value;let qty,amt;
+    if(useAmt){amt=av===''?NaN:+av;qty=isNum(amt)&&price?r2(amt/price):NaN}else{qty=qv===''?NaN:+qv;amt=isNum(qty)&&price?r2(qty*price):NaN}
+    // preview the three balances after this entry
+    const A=B.allocation+(kind==='allocation'?qty||0:0),Aa=B.allocAmt+(kind==='allocation'?amt||0:0),P=B.purchase+(kind==='purchase'?qty||0:0),Pa=B.purchaseAmt+(kind==='purchase'?amt||0:0);
+    const stock=bal?(isNum(qty)?qty:B.stock):kind==='purchase'?B.stock+(qty||0):kind==='fill'?B.stock-(qty||0):B.stock;
+    q('calc').innerHTML=`<div class="l"><span>Litres</span><b>${isNum(qty)?fmtL(qty):'—'}</b></div><div class="l"><span>Amount</span><b>${isNum(amt)?fmtRs(amt):'—'}</b></div>
+      <div class="l tot"><span>After this entry</span><b></b></div>
+      <div class="l"><span>Physical stock</span><b>${sL(r2(stock))}</b></div>
+      <div class="l"><span>Company balance</span><b>${sL(r2(A-P))} · ${sR(r2(Aa-Pa))}</b></div>
+      ${P>A?`<div class="l"><span>Own money used</span><b style="color:var(--r)">${fmtL(r2(P-A))} · ${fmtRs(r2(Math.max(0,Pa-Aa)))}</b></div>`:''}`;
+    return {qty,amt,price};
   }
   root.querySelectorAll('[data-kind]').forEach(b=>b.onclick=()=>{kind=b.dataset.kind;calc()});
   root.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{mode=b.dataset.mode;calc()});
@@ -1176,15 +1225,14 @@ function bindStockForm(root,sid,rec,onDone){
   q('day').onchange=()=>{if(!rec)q('price').value=priceOn(q('day').value||today());calc()};
   calc();
   return async()=>{
-    const v=calc(),day=q('day').value,priced=PRICED.includes(kind);
+    const v=calc(),day=q('day').value;
     if(!day)return toast('Select a date');
-    if(kind==='opening'){if(!isNum(v.qty))return toast('Enter opening balance (0 is allowed)')}
-    else if(!(v.qty>0))return toast(TWO_WAY.includes(kind)&&mode==='amount'?'Enter amount and price':'Enter diesel quantity');
-    if(priced&&!(v.price>0))return toast('Enter price per litre');
-    if(kind==='usage'){const avail=prevBal().bal;if(v.qty>avail&&!confirm(`Usage ${v.qty} L is more than the balance (${fmtN(avail,2)} L). Save anyway? Balance will show MINUS.`))return}
-    const data={kind,qty:r2(v.qty),mode:TWO_WAY.includes(kind)?mode:'litres',price:priced?r2(v.price):'',amount:priced?r2(v.amt):'',remarks:q('remarks').value.trim()};
-    const site=siteById(sid);
-    let r;
+    if(!(v.price>0))return toast('Enter price per litre');
+    if(kind==='opening'){if(!isNum(v.qty))return toast('Enter the balance (0 is allowed)')}
+    else if(!(v.qty>0))return toast(mode==='amount'?'Enter the amount':'Enter litres');
+    if(kind==='fill'){const avail=before().stock;if(v.qty>avail+0.004&&!confirm(`Filling ${v.qty} L is more than the stock (${fmtN(avail,2)} L). Save anyway? Stock will show MINUS.`))return}
+    const data={kind,qty:r2(v.qty),amount:r2(v.amt),price:r2(v.price),mode,remarks:q('remarks').value.trim()};
+    const site=siteById(sid);let r;
     if(rec){r=rec;r.history=(r.history||[]).concat([{at:Date.now(),user:S.user,dt:r.dt,data:r.data}]);r.dt=dayOf(r.dt)===day?r.dt:dtFor(day);r.data=data;r.editedBy=S.user}
     else r={id:uid(),type:'stock',site:sid,siteName:site.name,dt:dtFor(day),user:S.user,phone:S.phone,email:ACCOUNT?ACCOUNT.email:'',createdAt:Date.now(),deleted:false,data,src:{}};
     await putRec(r);onDone(r);
@@ -1212,7 +1260,7 @@ function openTransfer(fromSid,rec){
     if(f===t)return $('#terr').textContent='From and To site must be different.';
     if(!(qty>0))return $('#terr').textContent='Enter quantity.';
     const a=avail();if(qty>a)return $('#terr').textContent=`Not allowed: only ${fmtL(Math.max(0,a))} available at ${siteName(f)}.`;
-    const data={kind:'transfer',qty,to:t,toName:siteName(t),remarks:$('#tr').value.trim(),mode:'litres',price:'',amount:''};
+    const p=priceOn(day);const data={kind:'transfer',qty,to:t,toName:siteName(t),remarks:$('#tr').value.trim(),mode:'litres',price:p,amount:r2(qty*p)};
     let r;
     if(rec){r=rec;r.history=(r.history||[]).concat([{at:Date.now(),user:S.user,dt:r.dt,site:r.site,data:r.data}]);r.site=f;r.siteName=siteName(f);r.dt=dayOf(r.dt)===day?r.dt:dtFor(day);r.data=data;r.editedBy=S.user}
     else r={id:uid(),type:'stock',site:f,siteName:siteName(f),dt:dtFor(day),user:S.user,phone:S.phone,email:ACCOUNT?ACCOUNT.email:'',createdAt:Date.now(),deleted:false,data,src:{}};
@@ -1220,137 +1268,123 @@ function openTransfer(fromSid,rec){
   };
 }
 
+/* ---------- transaction cards ---------- */
+const KL={allocation:'ALLOCATED',purchase:'PURCHASED',fill:'FILLED',usage:'FILLED',opening:'BALANCE',tin:'RECEIVED',tout:'TRANSFER OUT',filled:'FILLED (DG)'};
+const KC={allocation:'tg-diesel',purchase:'tg-request',fill:'tg-energy',usage:'tg-energy',opening:'tg-stock',tin:'tg-stock',tout:'tg-stock',filled:'tg-energy'};
+function txCard(m,showSite){
+  const eff=m.kind==='allocation'?0:m.delta;
+  const qtyTxt=m.kind==='opening'?`set to ${tL(m.qty)}`:m.kind==='allocation'?`${fmtN(m.qty,2)} L`:`${sgn(eff)}${fmtN(Math.abs(eff),2)} L`;
+  return `<div class="txc" data-mid="${m.r.id}" data-auto="${m.auto?1:''}">
+    <div class="txh"><b>${fmtD(m.dt)}</b><small>${m.dt.slice(11,16)}</small>${showSite?`<b style="color:var(--tt)">${esc(m.site)}</b>`:''}<span class="tg ${KC[m.kind]}">${KL[m.kind]}</span>${m.r.history?.length?'<small style="color:var(--y)">edited</small>':''}${m.auto?'<small>from Diesel Filling</small>':''}</div>
+    ${m.kind==='tin'?`<div class="hint" style="margin:0 0 4px">From ${esc(siteName(m.r.site))}</div>`:m.kind==='tout'?`<div class="hint" style="margin:0 0 4px">To ${esc(siteName(m.r.data.to))}</div>`:''}
+    ${m.r.data?.remarks&&!m.auto?`<div class="hint" style="margin:0 0 4px">“${esc(m.r.data.remarks)}”</div>`:''}
+    <div class="txg">
+      <div><span>Litres</span><b style="color:${m.kind==='allocation'?'var(--g1)':colr(eff)}">${qtyTxt}</b></div>
+      <div><span>Amount</span><b>${m.est?'≈ ':''}${fmtRs(m.amount)}</b><small>@ ${fmtN(m.p,2)}/L</small></div>
+      <div><span>Stock balance</span><b>${sL(m.bal)}</b></div>
+      <div><span>Company balance</span><b>${sL(m.compBalL)}</b><small>${sR(m.compBalR)}</small></div>
+      ${m.persL>0.004?`<div style="grid-column:1/3"><span>Own money so far</span><b style="color:var(--r)">${fmtL(m.persL)}</b></div>`:''}
+    </div></div>`;
+}
+function bindTx(){$$('.txc[data-mid]').forEach(el=>el.onclick=()=>el.dataset.auto?recDetail(el.dataset.mid):stockDetail(el.dataset.mid))}
+function txFilters(F,withSite){
+  return `<div class="filters">${withSite?`<select class="sel" id="fs" style="grid-column:1/3"><option value="">All sites</option>${activeSites().map(s=>`<option value="${s.id}" ${F.site===s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select>`:''}
+    <select class="sel" id="fk" style="grid-column:1/3"><option value="">All transaction types</option>${[['allocation','Allocated'],['purchase','Purchased'],['fill','Filled'],['opening','Balance'],['tin','Received'],['tout','Transferred out']].map(([k,l])=>`<option value="${k}" ${F.kind===k?'selected':''}>${l}</option>`).join('')}</select>
+    <input class="sel" type="date" id="ff" value="${F.from}" title="From date"><input class="sel" type="date" id="ft" value="${F.to}" title="To date"></div>`;
+}
+const kindMatch=(k,f)=>!f||k===f||(f==='fill'&&FILLK.includes(k));
+function inOutBoxes(F){
+  return `<div class="g2" style="margin-bottom:10px">
+    <div class="cbox c"><h4>DIESEL IN</h4><div class="d" style="color:var(--g1);margin:2px 0 0">+${fmtN(F.inL,2)} L</div><small style="color:var(--m)">Purchased ${fmtRs(F.purchaseAmt)}</small></div>
+    <div class="cbox" style="background:var(--rl);border:1px solid #f3c2bd"><h4 style="color:var(--r)">DIESEL OUT</h4><div class="d" style="color:var(--r);margin:2px 0 0">−${fmtN(F.outL,2)} L</div><small style="color:var(--m)">Filled ${fmtRs(F.filledAmt)}</small></div></div>`;
+}
+
 /* ---------- site stock page ---------- */
 const STF={kind:'',from:'',to:'',newest:true};
-const KL={allocation:'ALLOCATED',purchase:'PURCHASED',usage:'USED',opening:'OPENING',tin:'RECEIVED',tout:'TRANSFER OUT',filled:'DG FILLING'};
-const KC={allocation:'tg-diesel',purchase:'tg-request',usage:'tg-energy',opening:'tg-energy',tin:'tg-stock',tout:'tg-stock',filled:'tg-diesel'};
-function txCard(m){
-  const z=(k)=>m.kind===k;
-  const line=(label,on,L,R,est)=>`<tr style="${on?'':'color:#aab4ae'}"><td>${label}</td><td class="r">${on?fmtL(L):'0.00 L'}</td><td class="r">${on?(est?'≈ ':'')+fmtRs(R):'₹0.00'}</td></tr>`;
-  const used=z('usage')||z('filled');
-  const vOpen=r2(m.open*m.p),vClose=r2(m.close*m.p);
-  return `<div class="txc" data-mid="${m.r.id}" data-auto="${m.auto?1:''}">
-    <div class="txh"><b>${fmtD(m.dt)}</b><small>${m.dt.slice(11,16)}</small><span class="tg ${KC[m.kind]}">${KL[m.kind]}</span>${m.r.history?.length?'<small style="color:var(--y)">edited</small>':''}${m.auto?'<small>from Diesel Filling</small>':''}</div>
-    ${z('tin')?`<div class="hint" style="margin:0 0 4px">From ${esc(siteName(m.r.site))}</div>`:z('tout')?`<div class="hint" style="margin:0 0 4px">To ${esc(siteName(m.r.data.to))}</div>`:''}
-    ${m.r.data?.remarks&&!m.auto?`<div class="hint" style="margin:0 0 4px">“${esc(m.r.data.remarks)}”</div>`:''}
-    <table class="txt"><tr><th></th><th class="r">Litres</th><th class="r">Amount</th></tr>
-      <tr><td>Opening</td><td class="r">${sL(m.open)}</td><td class="r" style="color:var(--m)">≈ ${tR(vOpen)}</td></tr>
-      ${z('opening')?`<tr><td>Balance set to</td><td class="r">${sL(m.qty)}</td><td class="r">${sgn(m.delta)}${fmtN(Math.abs(m.delta),2)} L</td></tr>`:''}
-      ${line('Allocated',z('allocation'),m.qty,m.amount,m.est)}
-      ${line('Purchased',z('purchase'),m.qty,m.amount,m.est)}
-      ${line(z('filled')?'Used (DG filling)':'Used',used,m.qty,m.amount,m.est)}
-      ${z('tin')||z('tout')?line(z('tin')?'Received':'Transferred out',true,m.qty,m.amount,true):''}
-      <tr class="cl"><td>Closing balance</td><td class="r">${sL(m.close)}</td><td class="r" style="color:var(--m)">≈ ${tR(vClose)}</td></tr>
-      <tr class="df"><td>Difference<br><small>allocated − purchased</small></td><td class="r">${sL(m.diffL)}</td><td class="r">${sR(m.diffR)}</td></tr>
-    </table></div>`;
-}
 function StockSite(sid){
   const site=siteById(sid);if(!site)return StockHome();
   autoPrice();
-  const all=stockMoves(sid),t=stockSum(all),st=stState(t.stock),start=stockStart(sid),pNow=priceOn(today());
-  let list=all.filter(m=>(!STF.kind||m.kind===STF.kind)&&(!STF.from||dayOf(m.dt)>=STF.from)&&(!STF.to||dayOf(m.dt)<=STF.to));
-  const F=stockSum(list);
-  if(STF.newest)list=list.slice().reverse();
-  const R3=(l,L,R)=>`<tr><td>${l}</td><td class="r">${L}</td><td class="r">${R}</td></tr>`;
+  const all=stockMoves(sid),t=stockSum(all),pNow=priceOn(today());
+  let list=all.filter(m=>kindMatch(m.kind,STF.kind)&&(!STF.from||dayOf(m.dt)>=STF.from)&&(!STF.to||dayOf(m.dt)<=STF.to));
+  const F=stockSum(list);if(STF.newest)list=list.slice().reverse();
   render(header('Stock - '+site.name,'#/stock')+`<div class="wrap">
-    <div class="bigv" style="background:${st.bg};margin-top:0"><div style="font-size:12px;color:var(--m)">Physical stock (closing balance)</div><b style="color:${st.c}">${sgn(t.stock)}${fmtN(Math.abs(t.stock),2)} L</b><div style="font-size:13px;color:var(--m)">≈ ${tR(r2(t.stock*pNow))} at ${fmtRs(pNow)}/L</div><div style="margin-top:4px">${stBadge(t.stock,1)}</div></div>
-    <div class="sec-t">Allocation vs Purchase</div>
-    <div class="scroll"><table class="tbl"><tr><th></th><th class="r">Litres</th><th class="r">Amount</th></tr>
-      ${R3('Allocated',fmtL(t.allocation),fmtRs(t.allocAmt))}
-      ${R3('Purchased',fmtL(t.purchase),fmtRs(t.purchaseAmt))}
-      <tr style="background:${stState(t.diffL).bg}"><td><b>Difference</b><br><small style="color:var(--m)">allocated − purchased</small></td><td class="r">${sL(t.diffL)}</td><td class="r">${sR(t.diffR)}</td></tr></table></div>
-    <div class="hint" style="margin:-6px 0 12px"><b style="color:var(--g1)">+</b> = allocation not yet purchased · <b style="color:var(--r)">−</b> = purchased more than allocated</div>
-    <div class="sec-t">Physical Stock</div>
-    <div class="scroll"><table class="tbl"><tr><th></th><th class="r">Litres</th><th class="r">Amount</th></tr>
-      ${t.adj?R3('Opening / adjustments',sL(t.adj),''):''}
-      ${R3('Purchased (in)',fmtL(t.purchase),fmtRs(t.purchaseAmt))}
-      ${R3('Received from other sites',fmtL(t.tin),'')}
-      ${R3('Filled to DG (Diesel Filling)',fmtL(t.filled),'≈ '+fmtRs(t.filledAmt))}
-      ${R3('Other usage',fmtL(t.usage),fmtRs(t.usageAmt))}
-      ${R3('Transferred to other sites',fmtL(t.tout),'')}
-      <tr style="background:${st.bg}"><td><b>Closing balance</b></td><td class="r">${sL(t.stock)}</td><td class="r">≈ ${tR(r2(t.stock*pNow))}</td></tr></table></div>
-    <div class="hint" style="margin:-6px 0 12px">DG filling is read from Diesel Filling ${start?`from <b>${fmtD(start)}</b>`:'(starts with your first stock entry)'}. <a href="javascript:setStockStart('${sid}')">Change</a></div>
-    <div class="btns" style="margin:0 0 14px"><button class="btn b-gr" onclick="dailyReport('${sid}')">${I.hist}Daily Report</button><button class="btn b-t" onclick="openTransfer('${sid}')">${I.swap}Transfer</button></div>
+    <div class="g2" style="margin-bottom:12px">
+      <div class="bigv" style="background:${stState(t.stock).bg};margin:0;padding:12px"><div style="font-size:11.5px;color:var(--m)">Physical stock</div><b style="font-size:26px;color:${colr(t.stock)}">${tL(t.stock)}</b><div style="font-size:12px;color:var(--m)">≈ ${tR(r2(t.stock*pNow))}</div></div>
+      <div class="bigv" style="background:${stState(t.compBalL).bg};margin:0;padding:12px"><div style="font-size:11.5px;color:var(--m)">Company balance</div><b style="font-size:26px;color:${colr(t.compBalL)}">${tL(t.compBalL)}</b><div style="font-size:12px;color:${colr(t.compBalR)}">${tR(t.compBalR)}</div></div></div>
+    ${summaryHTML(t,pNow)}
+    <div class="btns" style="margin:4px 0 14px"><button class="btn b-gr" onclick="dailyReport('${sid}')">${I.hist}Daily Report</button><button class="btn b-t" onclick="openTransfer('${sid}')">${I.swap}Transfer</button></div>
     <div class="card" id="sform"><h3>New Entry</h3>${stockFormHTML(all.length?'allocation':'opening')}<button class="btn b-g" id="ssave" style="width:100%">${I.save}Save Entry</button></div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin:4px 0 10px"><div class="sec-t" style="margin:0">All Transactions (${list.length})</div><button class="btn b-gr" id="ford" style="flex:none;padding:7px 12px;font-size:12.5px">${STF.newest?'Newest first ↓':'Oldest first ↑'}</button></div>
-    <div class="filters"><select class="sel" id="fk" style="grid-column:1/3"><option value="">All transaction types</option>${Object.keys(KL).map(k=>`<option value="${k}" ${STF.kind===k?'selected':''}>${SK[k].s}</option>`).join('')}</select>
-      <input class="sel" type="date" id="ff" value="${STF.from}" title="From date"><input class="sel" type="date" id="ft" value="${STF.to}" title="To date"></div>
-    ${list.length?`<div class="g2" style="margin-bottom:10px">
-        <div class="cbox c"><h4>DIESEL IN</h4><div class="d" style="color:var(--g1);margin:2px 0 0">+${fmtN(F.inL,2)} L</div><small style="color:var(--m)">Purchased ${fmtRs(F.purchaseAmt)}${F.tin?` · Received ${fmtN(F.tin,2)} L`:''}</small></div>
-        <div class="cbox" style="background:var(--rl);border:1px solid #f3c2bd"><h4 style="color:var(--r)">DIESEL OUT</h4><div class="d" style="color:var(--r);margin:2px 0 0">−${fmtN(F.outL,2)} L</div><small style="color:var(--m)">≈ ${fmtRs(F.usedAmt)}${F.tout?` · Sent ${fmtN(F.tout,2)} L`:''}</small></div></div>
-      ${list.map(txCard).join('')}
-      <div class="hint">“≈” = value at the diesel price of that date. Tap a transaction to edit.</div>`:'<div class="empty">No transactions yet. Start with an Opening Balance (0 is fine), then add Allocated / Purchased.</div>'}
+    ${txFilters(STF,false)}
+    ${list.length?inOutBoxes(F)+list.map(m=>txCard(m,false)).join('')+'<div class="hint">“≈” = value at the diesel price of that date. Tap a transaction to edit.</div>':'<div class="empty">No transactions yet. Start with a Balance entry (0 is fine), then add Allocated / Purchased / Filled.</div>'}
   </div>`,'home');
   $('#ssave').onclick=bindStockForm($('#sform'),sid,null,r=>{toast(SK[r.data.kind].l+' saved');StockSite(sid)});
   const rf=()=>{STF.kind=$('#fk').value;STF.from=$('#ff').value;STF.to=$('#ft').value;StockSite(sid)};
   ['#fk','#ff','#ft'].forEach(x=>$(x).onchange=rf);
   $('#ford').onclick=()=>{STF.newest=!STF.newest;StockSite(sid)};
-  $$('.txc[data-mid]').forEach(el=>el.onclick=()=>el.dataset.auto?recDetail(el.dataset.mid):stockDetail(el.dataset.mid));
+  bindTx();
 }
-async function setStockStart(sid){
-  const st=siteById(sid);const cur=stockStart(sid);
-  modal(`<h3>Count DG filling from</h3><div class="hint" style="margin-bottom:10px">Diesel Filling entries on or after this date are counted as usage from this site's stock.</div>
-    <input class="sel" type="date" id="ssd" value="${cur}"><div class="btns"><button class="btn b-gr" id="ssr">Auto (first stock entry)</button><button class="btn b-g" id="sso">Save</button></div>`);
-  const sv=async v=>{if(v)st.stockStart=v;else delete st.stockStart;await saveSiteConfig();closeModal();StockSite(sid)};
-  $('#sso').onclick=()=>sv($('#ssd').value);$('#ssr').onclick=()=>sv('');
+
+/* ---------- all transactions, all sites ---------- */
+const ATF={site:'',kind:'',from:'',to:''};
+function StockAllTx(){
+  if(!ATF.from&&!ATF.to)ATF.from=today().slice(0,7)+'-01';
+  const sites=ATF.site?[siteById(ATF.site)].filter(Boolean):activeSites();
+  let list=[];sites.forEach(s=>stockMoves(s.id).forEach(m=>{m.site=s.name;list.push(m)}));
+  list=list.filter(m=>kindMatch(m.kind,ATF.kind)&&(!ATF.from||dayOf(m.dt)>=ATF.from)&&(!ATF.to||dayOf(m.dt)<=ATF.to));
+  const F=stockSum(list);
+  list.sort((a,b)=>a.dt<b.dt?1:a.dt>b.dt?-1:0);
+  render(header('All Transactions','#/stock')+`<div class="wrap">
+    ${txFilters(ATF,true)}
+    ${list.length?inOutBoxes(F)+`<div class="hint" style="margin:-4px 0 10px">${list.length} transaction(s) · Stock and company balance are running balances of each site.</div>`+list.slice(0,400).map(m=>txCard(m,true)).join(''):'<div class="empty">No transactions for this filter.</div>'}
+  </div>`,'home');
+  const rf=()=>{ATF.site=$('#fs').value;ATF.kind=$('#fk').value;ATF.from=$('#ff').value;ATF.to=$('#ft').value;StockAllTx()};
+  ['#fs','#fk','#ff','#ft'].forEach(x=>$(x).onchange=rf);
+  bindTx();
 }
+
 function stockDetail(id){
   const r=RECS.find(x=>x.id===id);if(!r)return;const d=r.data;
-  const kindL=d.kind==='transfer'?'Transfer':SK[d.kind].l;
-  const hist=(r.history||[]).slice().reverse();
+  const kindL=d.kind==='transfer'?'Transfer':SK[d.kind].l;const hist=(r.history||[]).slice().reverse();
   modal(`<h3>${kindL} · ${esc(siteName(r.site))}</h3>
     <div class="dl"><span>Date</span><b>${fmtDT(r.dt)}</b>${d.kind==='transfer'?`<span>From → To</span><b>${esc(siteName(r.site))} → ${esc(siteName(d.to))}</b>`:''}
-    <span>${d.kind==='opening'?'Balance set to':'Quantity'}</span><b>${d.kind==='opening'?sL(d.qty):fmtL(d.qty)}</b>${PRICED.includes(d.kind)&&isNum(d.amount)?`<span>Price</span><b>${fmtRs(d.price)} / L</b><span>Amount</span><b>${fmtRs(d.amount)}</b>${TWO_WAY.includes(d.kind)?`<span>Entered as</span><b>${d.mode==='amount'?'Rupees':'Litres'}</b>`:''}`:''}
+    <span>${d.kind==='opening'?'Balance set to':'Litres'}</span><b>${d.kind==='opening'?sL(d.qty):fmtL(d.qty)}</b>
+    ${isNum(d.amount)?`<span>Amount</span><b>${fmtRs(d.amount)}</b><span>Price</span><b>${fmtRs(d.price)} / L</b><span>Entered as</span><b>${d.mode==='amount'?'Rupees':'Litres'}</b>`:''}
     <span>Remarks</span><b>${esc(d.remarks||'—')}</b><span>Entered by</span><b>${esc(r.user||'—')}</b>${r.editedBy?`<span>Last edited by</span><b>${esc(r.editedBy)}</b>`:''}</div>
-    ${hist.length?`<div class="sec-t">Edit history</div><div class="scroll"><table class="tbl"><tr><th>Changed</th><th>Before</th></tr>${hist.map(h=>`<tr><td>${new Date(h.at).toLocaleString('en-IN',{dateStyle:'short',timeStyle:'short'})}<br><small>${esc(h.user||'')}</small></td><td>${fmtD(h.dt)} · ${fmtL(h.data.qty)}${isNum(h.data.amount)&&h.data.amount!==''?' · '+fmtRs(h.data.amount):''}${h.data.to?' → '+esc(siteName(h.data.to)):''}</td></tr>`).join('')}</table></div>`:''}
+    ${hist.length?`<div class="sec-t">Edit history</div><div class="scroll"><table class="tbl"><tr><th>Changed</th><th>Before</th></tr>${hist.map(h=>`<tr><td>${new Date(h.at).toLocaleString('en-IN',{dateStyle:'short',timeStyle:'short'})}<br><small>${esc(h.user||'')}</small></td><td>${fmtD(h.dt)} · ${fmtL(h.data.qty)}${isNum(h.data.amount)?' · '+fmtRs(h.data.amount):''}${h.data.to?' → '+esc(siteName(h.data.to)):''}</td></tr>`).join('')}</table></div>`:''}
     <div class="btns"><button class="btn b-r" id="sdel">Delete</button><button class="btn b-b" id="sedit">${I.edit}Edit</button><button class="btn b-gr" onclick="closeModal()">Close</button></div>`);
   $('#sdel').onclick=async()=>{if(!confirm('Delete this stock entry? Balances will be recalculated.'))return;r.history=(r.history||[]).concat([{at:Date.now(),user:S.user,dt:r.dt,data:r.data,deleted:true}]);r.deleted=true;await putRec(r);closeModal();toast('Entry deleted');route()};
   $('#sedit').onclick=()=>{
     if(d.kind==='transfer')return openTransfer(null,r);
-    modal(`<h3>Edit ${SK[d.kind].l}</h3><div id="eform">${stockFormHTML(d.kind,{day:dayOf(r.dt),qty:d.qty,amount:d.amount,price:isNum(d.price)?d.price:priceOn(dayOf(r.dt)),mode:d.mode,remarks:d.remarks})}</div>
+    const k=d.kind==='usage'?'fill':d.kind;
+    modal(`<h3>Edit ${SK[k].l}</h3><div id="eform">${stockFormHTML(k,{day:dayOf(r.dt),qty:d.qty,amount:d.amount,price:isNum(d.price)?d.price:priceOn(dayOf(r.dt)),mode:d.mode,remarks:d.remarks})}</div>
       <div class="btns"><button class="btn b-gr" onclick="closeModal()">Cancel</button><button class="btn b-g" id="esave">${I.save}Save Changes</button></div>`);
     $('#esave').onclick=bindStockForm($('#eform'),r.site,r,()=>{closeModal();toast('Entry updated (history kept)');route()});
   };
 }
 
 /* ---------- daily report ---------- */
-function dailyRows(sid,day){
-  const all=stockMoves(sid);
-  return {dm:stockSum(movesBetween(sid,day,day,all)),cum:stockSum(movesBetween(sid,'',day,all)),open:stockSum(movesBetween(sid,'',addDays(day,-1),all)).stock,p:priceOn(day)};
-}
+function dailyRows(sid,day){const all=stockMoves(sid);return {dm:stockSum(movesBetween(sid,day,day,all)),cum:stockSum(movesBetween(sid,'',day,all)),open:stockSum(movesBetween(sid,'',addDays(day,-1),all)).stock,p:priceOn(day)}}
 function dailyText(sid,day){
-  const {dm,cum,open}=dailyRows(sid,day),st=stState(cum.stock);
+  const {dm,cum,open}=dailyRows(sid,day);
   return [`DIESEL STOCK REPORT`,`SITE: ${siteName(sid).toUpperCase()}`,`DATE: ${fmtD(day).replace(/\//g,'-')}`,'',
-    `Opening balance: ${tL(open)}`,
-    `Allocated: ${fmtL(dm.allocation)} (${fmtRs(dm.allocAmt)})`,
-    `Purchased: ${fmtL(dm.purchase)} (${fmtRs(dm.purchaseAmt)})`,
-    `Used (DG filling): ${fmtL(dm.filled)}`,...(dm.usage?[`Other usage: ${fmtL(dm.usage)} (${fmtRs(dm.usageAmt)})`]:[]),
-    ...(dm.tin?[`Received from other sites: ${fmtL(dm.tin)}`]:[]),...(dm.tout?[`Transferred out: ${fmtL(dm.tout)}`]:[]),
-    `Closing balance: ${tL(cum.stock)} (${st.t} ${st.sym})`,'',
-    `TILL DATE`,`Allocated: ${fmtL(cum.allocation)} (${fmtRs(cum.allocAmt)})`,`Purchased: ${fmtL(cum.purchase)} (${fmtRs(cum.purchaseAmt)})`,
-    `Difference (allocated − purchased): ${tL(cum.diffL)} (${tR(cum.diffR)})`].join('\n');
+    `Opening stock: ${tL(open)}`,`Allocated: ${fmtL(dm.allocation)} (${fmtRs(dm.allocAmt)})`,`Purchased: ${fmtL(dm.purchase)} (${fmtRs(dm.purchaseAmt)})`,`Filled: ${fmtL(dm.filled)} (${fmtRs(dm.filledAmt)})`,
+    ...(dm.tin?[`Received: ${fmtL(dm.tin)}`]:[]),...(dm.tout?[`Transferred out: ${fmtL(dm.tout)}`]:[]),`Closing stock: ${tL(cum.stock)} (${stState(cum.stock).t})`,'',
+    `TILL DATE`,`Company allocated: ${fmtL(cum.allocation)} (${fmtRs(cum.allocAmt)})`,`Purchased: ${fmtL(cum.purchase)} (${fmtRs(cum.purchaseAmt)})`,`Filled: ${fmtL(cum.filled)} (${fmtRs(cum.filledAmt)})`,
+    `Company allocation balance: ${tL(cum.compBalL)} (${tR(cum.compBalR)})`,`Own money (above allocation): ${fmtL(cum.persL)} (${fmtRs(cum.persR)})`,`Physical stock: ${tL(cum.stock)}`].join('\n');
 }
 function dailyReport(sid,day){
-  day=day||today();const {dm,cum,open,p}=dailyRows(sid,day),st=stState(cum.stock);
+  day=day||today();const {dm,cum,open,p}=dailyRows(sid,day);
   const R=(l,L,A)=>`<tr><td>${l}</td><td class="r">${L}</td><td class="r">${A}</td></tr>`;
   modal(`<h3>Daily Stock Report</h3>
     <div class="row" style="margin-bottom:10px"><select class="sel" id="drs">${activeSites().map(s=>`<option value="${s.id}" ${s.id===sid?'selected':''}>${esc(s.name)}</option>`).join('')}</select><input class="sel" type="date" id="drd" value="${day}" max="${today()}" style="max-width:150px"></div>
     <div class="sec-t" style="margin-bottom:6px">On ${fmtD(day)}</div>
     <div class="scroll"><table class="tbl"><tr><th></th><th class="r">Litres</th><th class="r">Amount</th></tr>
-      ${R('Opening balance',sL(open),'≈ '+tR(r2(open*p)))}
-      ${R('Allocated',fmtL(dm.allocation),fmtRs(dm.allocAmt))}
-      ${R('Purchased',fmtL(dm.purchase),fmtRs(dm.purchaseAmt))}
-      ${R('Used (DG filling)',fmtL(dm.filled),'≈ '+fmtRs(dm.filledAmt))}
-      ${dm.usage?R('Other usage',fmtL(dm.usage),fmtRs(dm.usageAmt)):''}
-      ${dm.tin?R('Received from other sites',fmtL(dm.tin),''):''}
-      ${dm.tout?R('Transferred out',fmtL(dm.tout),''):''}
-      <tr style="background:${st.bg}"><td><b>Closing balance</b></td><td class="r">${sL(cum.stock)}</td><td class="r">≈ ${tR(r2(cum.stock*p))}</td></tr></table></div>
+      ${R('Opening stock',sL(open),'≈ '+tR(r2(open*p)))}${R('Allocated',fmtL(dm.allocation),fmtRs(dm.allocAmt))}${R('Purchased',fmtL(dm.purchase),fmtRs(dm.purchaseAmt))}${R('Filled',fmtL(dm.filled),fmtRs(dm.filledAmt))}
+      ${dm.tin?R('Received',fmtL(dm.tin),''):''}${dm.tout?R('Transferred out',fmtL(dm.tout),''):''}
+      <tr style="background:${stState(cum.stock).bg}"><td><b>Closing stock</b></td><td class="r">${sL(cum.stock)}</td><td class="r">≈ ${tR(r2(cum.stock*p))}</td></tr></table></div>
     <div class="sec-t" style="margin-bottom:6px">Till date</div>
-    <div class="scroll"><table class="tbl"><tr><th></th><th class="r">Litres</th><th class="r">Amount</th></tr>
-      ${R('Allocated',fmtL(cum.allocation),fmtRs(cum.allocAmt))}
-      ${R('Purchased',fmtL(cum.purchase),fmtRs(cum.purchaseAmt))}
-      <tr style="background:${stState(cum.diffL).bg}"><td><b>Difference</b><br><small>allocated − purchased</small></td><td class="r">${sL(cum.diffL)}</td><td class="r">${sR(cum.diffR)}</td></tr></table></div>
-    <div style="text-align:center;margin:-4px 0 10px">${stBadge(cum.stock,1)} <small style="color:var(--m)">${st.t==='PLUS'?'Stock available':st.t==='MINUS'?'Stock shortage / excess usage':'No stock'}</small></div>
+    ${summaryHTML(cum,p)}
     <div class="btns"><button class="btn b-gr" id="drc">${I.copy}Copy</button><button class="btn b-wa" id="drw">${I.wa}WhatsApp</button><button class="btn b-gr" onclick="closeModal()">Close</button></div>`);
   $('#drs').onchange=()=>dailyReport($('#drs').value,$('#drd').value);
   $('#drd').onchange=()=>dailyReport($('#drs').value,$('#drd').value||today());
@@ -1362,39 +1396,38 @@ function dailyReport(sid,day){
 /* ---------- monthly report ---------- */
 const MR={month:'',site:''};
 function monthRange(m){const [y,mo]=m.split('-').map(Number);const last=new Date(y,mo,0).getDate();return [`${m}-01`,`${m}-${pad(last)}`,last]}
-function monthSite(sid,m){const [a,b]=monthRange(m);const all=stockMoves(sid);const t=stockSum(movesBetween(sid,a,b,all));t.open=stockSum(movesBetween(sid,'',addDays(a,-1),all)).stock;t.close=stockSum(movesBetween(sid,'',b,all)).stock;return t}
+function monthSite(sid,m){const [a,b]=monthRange(m);const all=stockMoves(sid);const t=stockSum(movesBetween(sid,a,b,all));const c=stockSum(movesBetween(sid,'',b,all));
+  t.open=stockSum(movesBetween(sid,'',addDays(a,-1),all)).stock;t.close=c.stock;t.closeComp=c.compStock;t.closePers=c.persStock;t.cumCompBalL=c.compBalL;t.cumCompBalR=c.compBalR;return t}
 function StockReport(){
   MR.month=MR.month||today().slice(0,7);
-  const [a,b,days]=monthRange(MR.month);const isCur=MR.month===today().slice(0,7);const dCount=isCur?+today().slice(8,10):days;
+  const [a,b,days]=monthRange(MR.month);const isCur=MR.month===today().slice(0,7);const dCount=isCur?+today().slice(8,10):days;const p=priceOn(isCur?today():b);
   const sites=MR.site?[siteById(MR.site)].filter(Boolean):activeSites();
   const rows=sites.map(s=>({s,t:monthSite(s.id,MR.month)}));
-  const T={};['open','allocation','allocAmt','purchase','purchaseAmt','filled','usage','used','usedAmt','tin','tout','diffL','diffR','close'].forEach(k=>T[k]=r2(rows.reduce((x,r)=>x+(r.t[k]||0),0)));
-  const avail=MR.site?T.open+T.purchase+T.tin:T.open+T.purchase;
-  const allMonths=new Set();let allUsed=0;sites.forEach(s=>stockMoves(s.id).forEach(m=>{allMonths.add(dayOf(m.dt).slice(0,7));if(m.kind==='filled'||m.kind==='usage')allUsed+=m.qty}));
-  const mAvg=allMonths.size?r2(allUsed/allMonths.size):0;
+  const T=sumSites(rows.map(r=>r.t));['open','close','closeComp','closePers'].forEach(k=>T[k]=r2(rows.reduce((x,r)=>x+(r.t[k]||0),0)));
   const pct=(x,y)=>y>0?fmtN(x/y*100,1)+'%':'—';
-  const R=(l,L,A)=>`<tr><td>${l}</td><td class="r">${L}</td><td class="r">${A}</td></tr>`;
+  const R=(l,L,A,cls='')=>`<tr class="${cls}"><td>${l}</td><td class="r">${L}</td><td class="r">${A}</td></tr>`;
   render(header('Monthly Stock Report','#/stock')+`<div class="wrap">
     <div class="filters"><input class="sel" type="month" id="mrm" value="${MR.month}"><select class="sel" id="mrs"><option value="">All ${activeSites().length} sites</option>${activeSites().map(s=>`<option value="${s.id}" ${MR.site===s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select></div>
     <div class="sec-t">${MR.site?esc(siteName(MR.site)):'All sites'} · ${new Date(a+'T00:00').toLocaleString('en-IN',{month:'long',year:'numeric'})}</div>
-    <div class="scroll"><table class="tbl"><tr><th></th><th class="r">Litres</th><th class="r">Amount</th></tr>
-      ${R('Opening balance (month start)',sL(T.open),'')}
-      ${R('Total allocated',fmtL(T.allocation),fmtRs(T.allocAmt))}
+    <div class="sumsec sec-c"><div class="sh">Month summary</div><table class="tbl"><tr><th></th><th class="r">Litres</th><th class="r">Amount</th></tr>
+      ${R('Total company allocation',fmtL(T.allocation),fmtRs(T.allocAmt))}
       ${R('Total purchased',fmtL(T.purchase),fmtRs(T.purchaseAmt))}
-      <tr style="background:${stState(T.diffL).bg}"><td><b>Difference</b> <small>alloc − purch</small></td><td class="r">${sL(T.diffL)}</td><td class="r">${sR(T.diffR)}</td></tr>
-      ${R('Used (DG filling + other)',fmtL(T.used),'≈ '+fmtRs(T.usedAmt))}
-      ${R(MR.site?'Received / transferred out':'Transferred between sites',MR.site?`${fmtN(T.tin,2)} / ${fmtN(T.tout,2)} L`:fmtL(T.tout),'')}
-      <tr style="background:${stState(T.close).bg}"><td><b>Closing balance (month end)</b></td><td class="r">${sL(T.close)}</td><td class="r"></td></tr></table></div>
+      ${R('Total diesel filled',fmtL(T.filled),fmtRs(T.filledAmt))}
+      ${R('<b>Remaining company balance</b><br><small>allocated − purchased</small>',sL(T.compBalL),sR(T.compBalR),'hl')}
+      ${R('<b>Personally funded (own money)</b>',`<span style="color:${T.persL>0?'var(--r)':'var(--m)'};font-weight:700">${fmtL(T.persL)}</span>`,`<span style="color:${T.persR>0?'var(--r)':'var(--m)'};font-weight:700">${fmtRs(T.persR)}</span>`,'hl')}
+      ${R('Physical stock – month start',sL(T.open),'≈ '+tR(r2(T.open*p)))}
+      ${R('<b>Physical stock – month end</b>',sL(T.close),'≈ '+tR(r2(T.close*p)),'hl')}
+      ${R('<small>of which company-funded / own-money</small>',`<small>${tL(T.closeComp)} / ${tL(T.closePers)}</small>`,'')}</table></div>
     <div class="card"><h3>Analysis</h3><div class="dl" style="margin:0">
-      <span>Daily average usage</span><b>${fmtN(T.used/dCount,2)} L/day</b>
-      <span>Monthly average usage</span><b>${fmtL(mAvg)}</b>
-      <span>Allocated vs purchased</span><b>${fmtN(T.allocation,1)} / ${fmtN(T.purchase,1)} L (${pct(T.purchase,T.allocation)})</b>
-      <span>Remaining stock %</span><b>${pct(T.close,avail)}</b>
-      <span>Purchase expenditure</span><b>${fmtRs(T.purchaseAmt)}</b></div></div>
+      <span>Daily average filled</span><b>${fmtN(T.filled/dCount,2)} L/day</b>
+      <span>Allocation used for purchase</span><b>${pct(T.compPurchL,T.allocation)}</b>
+      <span>Filled vs purchased</span><b>${pct(T.filled,T.purchase)}</b>
+      <span>Own money spent</span><b style="color:${T.persR>0?'var(--r)':'inherit'}">${fmtRs(T.persR)}</b></div></div>
     ${MR.site?'':`<div class="sec-t">Site-wise (${fmtD(a)} – ${fmtD(b)})</div>
-    <div class="scroll"><table class="tbl"><tr><th>Site</th><th class="r">Alloc</th><th class="r">Purch</th><th class="r">Diff</th><th class="r">Used</th><th class="r">Stock</th></tr>
-      ${rows.map(({s,t})=>`<tr onclick="MR.site='${s.id}';StockReport()" style="cursor:pointer"><td>${esc(s.name)}</td><td class="r">${fmtN(t.allocation,1)}</td><td class="r">${fmtN(t.purchase,1)}</td><td class="r" style="color:${colr(t.diffL)};font-weight:700">${sgn(t.diffL)}${fmtN(Math.abs(t.diffL),1)}</td><td class="r">${fmtN(t.used,1)}</td><td class="r" style="color:${colr(t.close)};font-weight:700">${sgn(t.close)}${fmtN(Math.abs(t.close),1)}</td></tr>`).join('')}
-      <tr style="font-weight:800;background:var(--gl)"><td>TOTAL</td><td class="r">${fmtN(T.allocation,1)}</td><td class="r">${fmtN(T.purchase,1)}</td><td class="r" style="color:${colr(T.diffL)}">${sgn(T.diffL)}${fmtN(Math.abs(T.diffL),1)}</td><td class="r">${fmtN(T.used,1)}</td><td class="r" style="color:${colr(T.close)}">${sgn(T.close)}${fmtN(Math.abs(T.close),1)}</td></tr></table></div>
+    <div class="scroll"><table class="tbl"><tr><th>Site</th><th class="r">Alloc</th><th class="r">Purch</th><th class="r">Filled</th><th class="r">Co. bal</th><th class="r">Own</th><th class="r">Stock</th></tr>
+      ${rows.map(({s,t})=>`<tr onclick="MR.site='${s.id}';StockReport()" style="cursor:pointer"><td>${esc(s.name)}</td><td class="r">${fmtN(t.allocation,1)}</td><td class="r">${fmtN(t.purchase,1)}</td><td class="r">${fmtN(t.filled,1)}</td><td class="r" style="color:${colr(t.compBalL)};font-weight:700">${sgn(t.compBalL)}${fmtN(Math.abs(t.compBalL),1)}</td><td class="r" style="color:${t.persL>0?'var(--r)':'inherit'}">${fmtN(t.persL,1)}</td><td class="r" style="color:${colr(t.close)};font-weight:700">${sgn(t.close)}${fmtN(Math.abs(t.close),1)}</td></tr>`).join('')}
+      <tr style="font-weight:800;background:var(--gl)"><td>TOTAL L</td><td class="r">${fmtN(T.allocation,1)}</td><td class="r">${fmtN(T.purchase,1)}</td><td class="r">${fmtN(T.filled,1)}</td><td class="r" style="color:${colr(T.compBalL)}">${sgn(T.compBalL)}${fmtN(Math.abs(T.compBalL),1)}</td><td class="r">${fmtN(T.persL,1)}</td><td class="r" style="color:${colr(T.close)}">${sgn(T.close)}${fmtN(Math.abs(T.close),1)}</td></tr>
+      <tr style="font-weight:700;background:var(--gl);font-size:11.5px"><td>TOTAL ₹</td><td class="r">${fmtN(T.allocAmt,0)}</td><td class="r">${fmtN(T.purchaseAmt,0)}</td><td class="r">${fmtN(T.filledAmt,0)}</td><td class="r" style="color:${colr(T.compBalR)}">${sgn(T.compBalR)}${fmtN(Math.abs(T.compBalR),0)}</td><td class="r">${fmtN(T.persR,0)}</td><td class="r">${fmtN(T.close*p,0)}</td></tr></table></div>
     <div class="hint" style="margin:-6px 0 12px">Tap a site for its own report.</div>`}
     ${MR.site?`<button class="btn b-gr" style="width:100%;margin-bottom:10px" onclick="location.hash='#/stock/${MR.site}'">Open ${esc(siteName(MR.site))} transactions</button>`:''}
     <div class="btns"><button class="btn b-gr" id="mrc">${I.copy}Copy</button><button class="btn b-wa" id="mrw">${I.wa}WhatsApp</button><button class="btn b-g" onclick="exportExcel()">${I.xls}Excel</button></div>
@@ -1402,10 +1435,9 @@ function StockReport(){
   $('#mrm').onchange=e=>{MR.month=e.target.value||today().slice(0,7);StockReport()};
   $('#mrs').onchange=e=>{MR.site=e.target.value;StockReport()};
   const txt=()=>[`MONTHLY DIESEL STOCK REPORT`,`${MR.site?'SITE: '+siteName(MR.site).toUpperCase():'ALL SITES'}`,`MONTH: ${fmtD(a).slice(3)}`,'',
-    `Opening balance: ${tL(T.open)}`,`Allocated: ${fmtL(T.allocation)} (${fmtRs(T.allocAmt)})`,`Purchased: ${fmtL(T.purchase)} (${fmtRs(T.purchaseAmt)})`,
-    `Difference (allocated − purchased): ${tL(T.diffL)} (${tR(T.diffR)})`,`Used: ${fmtL(T.used)}`,`Transferred: ${fmtL(T.tout)}`,`Closing balance: ${tL(T.close)} (${stState(T.close).t})`,'',
-    `Daily average usage: ${fmtN(T.used/dCount,2)} L/day`,`Remaining stock: ${pct(T.close,avail)}`,
-    ...(MR.site?[]:['','Site-wise closing / difference:',...rows.map(({s,t})=>`${s.name}: ${tL(t.close)} / ${tL(t.diffL)}`)])].join('\n');
+    `Total company allocation: ${fmtL(T.allocation)} (${fmtRs(T.allocAmt)})`,`Total purchased: ${fmtL(T.purchase)} (${fmtRs(T.purchaseAmt)})`,`Total diesel filled: ${fmtL(T.filled)} (${fmtRs(T.filledAmt)})`,
+    `Remaining company balance: ${tL(T.compBalL)} (${tR(T.compBalR)})`,`Personally funded: ${fmtL(T.persL)} (${fmtRs(T.persR)})`,`Physical stock (month end): ${tL(T.close)}`,
+    ...(MR.site?[]:['','Site-wise company balance / own money / stock:',...rows.map(({s,t})=>`${s.name}: ${tL(t.compBalL)} / ${fmtN(t.persL,1)} L / ${tL(t.close)}`)])].join('\n');
   $('#mrc').onclick=async()=>{try{await navigator.clipboard.writeText(txt());toast('Report copied')}catch(e){toast('Copy failed')}};
   $('#mrw').onclick=()=>window.open(`https://wa.me/?text=${encodeURIComponent(txt())}`,'_blank');
 }
@@ -1804,25 +1836,27 @@ async function exportExcel(list){
   add('Previous Readings',['Site','Fuel (L)','Fuel Date','DG HMR','DG Date','EB kWh','kWh Date','EB kVAh','kVAh Date'],latestBySite().map(x=>[x.s.name,x.fuel?.v??'',x.fuel?fmtD(x.fuel.dt):'',x.dg?.v??'',x.dg?fmtD(x.dg.dt):'',x.kwh?.v??'',x.kwh?fmtD(x.kwh.dt):'',x.kvah?.v??'',x.kvah?fmtD(x.kvah.dt):'']));
   const sr=live().filter(r=>r.type==='stock').sort((a,b)=>a.dt<b.dt?-1:1);
   if(sr.length){
-    const kn=k=>k==='transfer'?'Transfer':SK[k]?.l||k;const base=r=>[r.id,...dt(r),siteName(r.site)];
-    add('Diesel Allocation Records',['Record ID','Date','Time','Site','Litres','Price (Rs/L)','Value (Rs)','Remarks','User'],sr.filter(r=>r.data.kind==='allocation').map(r=>{const d=r.data;return [...base(r),n(d.qty),n(d.price),n(d.amount),d.remarks||'',r.user||'']}));
+    const base=r=>[r.id,...dt(r),siteName(r.site)];
+    add('Diesel Allocation Records',['Record ID','Date','Time','Site','Litres','Price (Rs/L)','Amount (Rs)','Entered As','Remarks','User'],sr.filter(r=>r.data.kind==='allocation').map(r=>{const d=r.data;return [...base(r),n(d.qty),n(d.price),n(d.amount),d.mode==='amount'?'Rupees':'Litres',d.remarks||'',r.user||'']}));
     const ledger=[];
-    S.sites.forEach(st=>stockMoves(st.id).forEach(m=>{const k=m.kind;ledger.push([fmtD(m.dt),m.dt.slice(11,16),st.name,KL[k],m.open,
-      k==='allocation'?m.qty:'',k==='allocation'?m.amount:'',k==='purchase'?m.qty:'',k==='purchase'?m.amount:'',
-      (k==='usage'||k==='filled')?m.qty:'',(k==='usage'||k==='filled')?m.amount:'',k==='tin'?m.qty:'',k==='tout'?m.qty:'',k==='opening'?m.qty:'',
-      m.close,m.diffL,m.diffR,m.est?'Estimated at day price':'',m.auto?'Diesel Filling':(m.r.data.remarks||''),m.r.user||''])}));
+    S.sites.forEach(st=>stockMoves(st.id).forEach(m=>ledger.push([fmtD(m.dt),m.dt.slice(11,16),st.name,KL[m.kind],m.kind==='opening'?m.qty:m.kind==='allocation'?m.qty:m.delta,m.amount,m.p,m.est?'approx (price of day)':(m.r.data.mode==='amount'?'Rupees':'Litres'),m.bal,m.compBalL,m.compBalR,m.persL,m.compStock,m.persStock,m.auto?'Diesel Filling':(m.r.data.remarks||''),m.r.user||''])));
     ledger.sort((x,y)=>(x[0].split('/').reverse().join('')+x[1])<(y[0].split('/').reverse().join('')+y[1])?-1:1);
-    add('Diesel Stock Transactions',['Date','Time','Site','Type','Opening (L)','Allocated (L)','Allocated (Rs)','Purchased (L)','Purchased (Rs)','Used (L)','Used (Rs)','Received (L)','Transferred Out (L)','Balance Set To (L)','Closing (L)','Difference Alloc-Purch (L)','Difference (Rs)','Amount Note','Remarks','User'],ledger);
-    add('Additional Diesel Purchases',['Record ID','Date','Time','Site','Litres','Price (Rs/L)','Amount (Rs)','Entered As','Remarks','User'],sr.filter(r=>r.data.kind==='purchase').map(r=>{const d=r.data;return [...base(r),n(d.qty),n(d.price),n(d.amount),d.mode==='amount'?'Rupees':'Litres',d.remarks||'',r.user||'']}));
+    add('Diesel Stock Transactions',['Date','Time','Site','Type','Litres (+in / -out)','Amount (Rs)','Price (Rs/L)','Entered As','Physical Stock (L)','Company Balance (L)','Company Balance (Rs)','Own Money Diesel (L)','Company-funded Stock (L)','Own-money Stock (L)','Remarks','User'],ledger);
+    add('Diesel Purchases',['Record ID','Date','Time','Site','Litres','Price (Rs/L)','Amount (Rs)','Entered As','Remarks','User'],sr.filter(r=>r.data.kind==='purchase').map(r=>{const d=r.data;return [...base(r),n(d.qty),n(d.price),n(d.amount),d.mode==='amount'?'Rupees':'Litres',d.remarks||'',r.user||'']}));
+    add('Diesel Filled',['Record ID','Date','Time','Site','Litres','Price (Rs/L)','Amount (Rs)','Entered As','Remarks','User'],sr.filter(r=>r.data.kind==='fill'||r.data.kind==='usage').map(r=>{const d=r.data;return [...base(r),n(d.qty),n(d.price),n(d.amount),d.mode==='amount'?'Rupees':'Litres',d.remarks||'',r.user||'']}));
     add('Diesel Transfer Records',['Record ID','Date','Time','From Site','To Site','Litres','Remarks','User'],sr.filter(r=>r.data.kind==='transfer').map(r=>[...base(r),siteName(r.data.to),n(r.data.qty),r.data.remarks||'',r.user||'']));
-    const daily=[],monthly=[];
-    S.sites.forEach(st=>{const mv=stockMoves(st.id);const days=[...new Set(mv.map(m=>dayOf(m.dt)))].sort();
+    const daily=[],monthly=[],siteSum=[];
+    S.sites.forEach(st=>{const mv=stockMoves(st.id);if(!mv.length)return;const days=[...new Set(mv.map(m=>dayOf(m.dt)))].sort();
       days.forEach(d=>{const t=stockSum(movesBetween(st.id,d,d,mv)),c=stockSum(movesBetween(st.id,'',d,mv)),o=stockSum(movesBetween(st.id,'',addDays(d,-1),mv)).stock;
-        daily.push([d,st.name,o,t.allocation,t.allocAmt,t.purchase,t.purchaseAmt,t.used,t.usedAmt,t.tin,t.tout,c.stock,c.diffL,c.diffR,stState(c.stock).t])});
-      [...new Set(days.map(d=>d.slice(0,7)))].forEach(m=>{const t=monthSite(st.id,m);monthly.push([m,st.name,t.open,t.allocation,t.allocAmt,t.purchase,t.purchaseAmt,t.diffL,t.diffR,t.used,t.usedAmt,t.tin,t.tout,t.close,stState(t.close).t])})});
-    add('Daily Stock Reports',['Date','Site','Opening (L)','Allocated (L)','Allocated (Rs)','Purchased (L)','Purchased (Rs)','Used (L)','Used (Rs approx)','Received (L)','Transferred Out (L)','Closing (L)','Difference till date (L)','Difference till date (Rs)','Status'],daily.sort((x,y)=>x[0]<y[0]?-1:1).map(r=>[fmtD(r[0]),...r.slice(1)]));
-    add('Monthly Stock Reports',['Month','Site','Opening (L)','Allocated (L)','Allocated (Rs)','Purchased (L)','Purchased (Rs)','Difference (L)','Difference (Rs)','Used (L)','Used (Rs approx)','Received (L)','Transferred Out (L)','Closing (L)','Status'],monthly.sort((x,y)=>x[0]<y[0]?-1:1));
+        daily.push([d,st.name,o,t.allocation,t.allocAmt,t.purchase,t.purchaseAmt,t.filled,t.filledAmt,t.tin,t.tout,c.stock,c.compBalL,c.compBalR,c.persL,c.persR])});
+      [...new Set(days.map(d=>d.slice(0,7)))].forEach(m=>{const t=monthSite(st.id,m);monthly.push([m,st.name,t.open,t.allocation,t.allocAmt,t.purchase,t.purchaseAmt,t.filled,t.filledAmt,t.compBalL,t.compBalR,t.persL,t.persR,t.close])});
+      const c=stockSum(mv),pp=priceOn(dayOf(nowLocal()));siteSum.push([st.name,c.allocation,c.allocAmt,c.purchase,c.purchaseAmt,c.filled,c.filledAmt,c.compBalL,c.compBalR,c.persL,c.persR,c.stock,r2(c.stock*pp),c.compStock,c.persStock])});
+    add('Daily Stock Reports',['Date','Site','Opening Stock (L)','Allocated (L)','Allocated (Rs)','Purchased (L)','Purchased (Rs)','Filled (L)','Filled (Rs)','Received (L)','Transferred Out (L)','Closing Stock (L)','Company Balance till date (L)','Company Balance till date (Rs)','Own Money till date (L)','Own Money till date (Rs)'],daily.sort((x,y)=>x[0]<y[0]?-1:1).map(r=>[fmtD(r[0]),...r.slice(1)]));
+    add('Monthly Stock Reports',['Month','Site','Opening Stock (L)','Allocated (L)','Allocated (Rs)','Purchased (L)','Purchased (Rs)','Filled (L)','Filled (Rs)','Company Balance (L)','Company Balance (Rs)','Own Money (L)','Own Money (Rs)','Closing Stock (L)'],monthly.sort((x,y)=>x[0]<y[0]?-1:1));
+    const tot=siteSum.reduce((a,r)=>r.map((v,i)=>i?r2((a[i]||0)+v):'ALL SITES'),[]);
+    add('Site Stock Summary',['Site','Allocated (L)','Allocated (Rs)','Purchased (L)','Purchased (Rs)','Filled (L)','Filled (Rs)','Company Balance (L)','Company Balance (Rs)','Own Money (L)','Own Money (Rs)','Physical Stock (L)','Physical Stock (Rs approx)','Company-funded Stock (L)','Own-money Stock (L)'],siteSum.length?[...siteSum,tot]:[]);
   }
+  add('Diesel Price History',['Effective From','Price (Rs/L)','Source / Changed By'],(S.priceHistory||[]).slice().sort((x,y)=>x.from<y.from?-1:1).map(p=>[fmtD(p.from),+p.price,p.user||'Default']));
   const tv=live().filter(r=>r.type==='travel'),fu=live().filter(r=>r.type==='fuel');
   if(tv.length||fu.length){
     const cfg=travelCfg();const days=[...new Set([...tv.map(r=>r.data.day),...fu.map(r=>dayOf(r.dt))])].sort();
@@ -1834,7 +1868,6 @@ async function exportExcel(list){
     add('Petrol Fill-ups',['Date','Time','Litres','Price (Rs/L)','Amount (Rs)','Entered As','Odometer','Full Tank','Real Mileage (km/l)','Mileage Based On','Remarks'],fuelRecs().map(f=>{const d=f.data,m=RM.find(x=>x.id===f.id);return [fmtD(f.dt),f.dt.slice(11,16),n(d.litres),n(d.price),n(d.amount),d.mode==='amount'?'Rupees':'Litres',d.odo===''?'':n(d.odo),d.full===false?'No':'Yes',m?m.mileage:'',m?m.how:'',d.remarks||'']}));
     add('Petrol Price History',['Effective From','Price (Rs/L)','Source / Changed By'],(S.petrolHistory||[]).slice().sort((x,y)=>x.from<y.from?-1:1).map(p=>[fmtD(p.from),+p.price,p.user||'']));
   }
-  add('Diesel Price History',['Effective From','Price (Rs/L)','Source / Changed By'],(S.priceHistory||[]).slice().sort((x,y)=>x.from<y.from?-1:1).map(p=>[fmtD(p.from),+p.price,p.user||'']));
   XLSX.writeFile(wb,`FieldRecord_${dayOf(nowLocal())}.xlsx`);
 }
 
