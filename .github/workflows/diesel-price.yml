@@ -1,0 +1,127 @@
+name: Daily diesel price (Kanyakumari)
+
+on:
+  schedule:
+    - cron: '35 1 * * *'   # 07:05 IST every day
+    - cron: '35 5 * * *'   # 11:05 IST retry
+  workflow_dispatch:        # "Run workflow" button for a manual update
+
+permissions:
+  contents: write
+
+jobs:
+  update-price:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get today's diesel price
+        run: |
+          cat > /tmp/diesel_price.py <<'PYEOF'
+          #!/usr/bin/env python3
+          """Field Record - daily diesel price for Kanyakumari district.
+          Run by GitHub Actions every morning. Reads the published daily rate from
+          public fuel-price pages, cross-checks them, and writes price.json for the app.
+          If nothing reliable is found, the old price.json is left unchanged."""
+          import datetime, html, json, os, re, sys, urllib.request
+
+          IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+          NOW = datetime.datetime.now(IST)
+          TODAY = NOW.date().isoformat()
+          OUT = 'price.json'
+          HEAD = {'User-Agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Mobile Safari/537.36',
+                  'Accept-Language': 'en-IN,en;q=0.9,hi;q=0.8'}
+          NUM = r'([0-9]{2,3}\.[0-9]{1,2})'
+          RS = r'(?:₹|Rs\.?|INR)\s*'
+          # (name, url, patterns) - checked in this order
+          SOURCES = [
+              ('BusinessToday', 'https://www.businesstoday.in/fuel-price/diesel-price-in-kanniyakumari-today',
+               [r'Diesel price in Kanniyakumari (?:stands at|is)\s*' + RS + NUM,
+                r'Diesel Price in Kanniyakumari today is\s*' + RS + NUM]),
+              ('AajTak', 'https://www.aajtak.in/fuel-price/diesel-price-in-kanniyakumari-today',
+               [r'डी(?:ज़|ज़|ज)ल की कीमत\s*' + NUM,
+                r'Diesel price in Kanniyakumari (?:stands at|is)\s*' + RS + NUM]),
+              ('BankBazaar', 'https://www.bankbazaar.com/fuel/diesel-price-kanyakumari.html',
+               [RS + NUM + r'\s*/\s*1\s*(?:ltr|litre)']),
+          ]
+
+          def page_text(url):
+              req = urllib.request.Request(url, headers=HEAD)
+              with urllib.request.urlopen(req, timeout=40) as r:
+                  raw = r.read().decode('utf-8', 'ignore')
+              no_js = re.sub(r'(?is)<(script|style)[^>]*>.*?</\1>', ' ', raw)
+              clean = lambda t: re.sub(r'\s+', ' ', html.unescape(re.sub(r'<[^>]+>', ' ', t)))
+              return clean(no_js), clean(raw)
+
+          def find(texts, patterns):
+              for t in texts:
+                  for p in patterns:
+                      m = re.search(p, t, re.I)
+                      if m:
+                          v = float(m.group(1))
+                          if 70 <= v <= 150:
+                              return round(v, 2)
+              return None
+
+          def main():
+              found = {}
+              for name, url, pats in SOURCES:
+                  try:
+                      v = find(page_text(url), pats)
+                      print(f'{name}: {v}')
+                      if v:
+                          found[name] = v
+                  except Exception as e:
+                      print(f'{name}: error {e}')
+              if not found:
+                  print('No price found - keeping previous price.json')
+                  return 0
+
+              old = {}
+              if os.path.exists(OUT):
+                  try:
+                      old = json.load(open(OUT, encoding='utf-8'))
+                  except Exception:
+                      old = {}
+
+              # prefer a value confirmed by 2 sources, else the first source in priority order
+              names = list(found)
+              price, agree = None, []
+              for n in names:
+                  same = [x for x in names if abs(found[x] - found[n]) <= 0.05]
+                  if len(same) >= 2:
+                      price, agree = found[n], same
+                      break
+              if price is None:
+                  price, agree = found[names[0]], [names[0]]
+                  # an unconfirmed big jump is suspicious - keep the old price
+                  if old.get('price') and abs(price - float(old['price'])) > 5:
+                      print(f'Unconfirmed jump {old["price"]} -> {price}; keeping old price')
+                      return 0
+
+              hist = [h for h in old.get('history', []) if h.get('date') != TODAY]
+              hist.append({'date': TODAY, 'price': price})
+              data = {
+                  'area': 'Kanyakumari district', 'fuel': 'Diesel', 'unit': 'INR per litre',
+                  'price': price, 'date': TODAY, 'source': ' + '.join(agree), 'confirmed': len(agree) >= 2,
+                  'all_sources': found, 'updated': NOW.isoformat(timespec='minutes'),
+                  'note': 'Reference retail price from public fuel-price pages; actual pump rate can differ slightly by oil company.',
+                  'history': hist[-120:],
+              }
+              if old.get('price') == price and old.get('date') == TODAY and old.get('source') == data['source']:
+                  print('No change')
+                  return 0
+              with open(OUT, 'w', encoding='utf-8') as f:
+                  json.dump(data, f, ensure_ascii=False, indent=1)
+              print(f'Saved {price} ({data["source"]}) for {TODAY}')
+              return 0
+
+          if __name__ == '__main__':
+              sys.exit(main())
+          PYEOF
+          python3 /tmp/diesel_price.py
+      - name: Save price.json
+        run: |
+          git config user.name "field-record-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add price.json
+          git diff --staged --quiet || (git commit -m "Diesel price $(TZ=Asia/Kolkata date +%F)" && git push)
