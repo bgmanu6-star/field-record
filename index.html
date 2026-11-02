@@ -14,7 +14,7 @@
 <meta name="description" content="Field Record – DG, energy reading and diesel request management. Crafted by Manu Brahma.">
 <title>Field Record</title>
 <style>
-:root{--tt:#0e7c7b;--tl:#e1f3f2;--g:#0b5d34;--g1:#14804a;--gl:#e8f6ee;--gb:#cbe8d6;--o:#ee7a16;--ol:#fff2e5;--b:#1f6fd1;--bl:#e9f2fd;--r:#d4291f;--rl:#fdecea;--y:#a86200;--yl:#fff6dc;--t:#18221d;--m:#68756e;--line:#e2e8e4;--bg:#eef3f0}
+:root{--pp:#6b4fc8;--pl:#efebfc;--tt:#0e7c7b;--tl:#e1f3f2;--g:#0b5d34;--g1:#14804a;--gl:#e8f6ee;--gb:#cbe8d6;--o:#ee7a16;--ol:#fff2e5;--b:#1f6fd1;--bl:#e9f2fd;--r:#d4291f;--rl:#fdecea;--y:#a86200;--yl:#fff6dc;--t:#18221d;--m:#68756e;--line:#e2e8e4;--bg:#eef3f0}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0}
 body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans",sans-serif;background:var(--bg);color:var(--t);font-size:15px}
@@ -45,6 +45,7 @@ input,select,textarea{font:inherit;color:inherit}
 .mcard .ar{margin-left:auto;width:22px;height:22px;flex:none}
 .m-g{background:var(--gl)}.m-g .ic{background:var(--g1)}.m-g b,.m-g .ar{color:var(--g)}
 .m-b{background:var(--bl)}.m-b .ic{background:var(--b)}.m-b b,.m-b .ar{color:var(--b)}
+.m-p{background:var(--pl)}.m-p .ic{background:var(--pp)}.m-p b,.m-p .ar{color:var(--pp)}.b-p{background:var(--pp);color:#fff}.tg-travel{background:var(--pl);color:var(--pp)}.tg-fuel{background:var(--ol);color:#b65400}
 .m-t{background:var(--tl)}.m-t .ic{background:var(--tt)}.m-t b,.m-t .ar{color:var(--tt)}
 .b-t{background:var(--tt);color:#fff}.acc-t .num{background:var(--tt)}.tg-stock{background:var(--tl);color:var(--tt)}
 .m-o{background:var(--ol)}.m-o .ic{background:var(--o)}.m-o b,.m-o .ar{color:#b65400}
@@ -247,6 +248,8 @@ clock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="
 alert:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/></svg>',
 barrel:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="7" ry="2.5"/><path d="M5 5v14c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V5"/><path d="M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/></svg>',
 swap:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/></svg>',
+scooter:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="17.5" r="2.5"/><circle cx="18.5" cy="17.5" r="2.5"/><path d="M8 17.5h7.5l2-6.5h-4M15 5h2l1.5 6M8 17.5 6.5 11H11l2 3"/></svg>',
+upload:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>',
 logo:'<svg viewBox="0 0 64 64" width="64" height="64" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="10" width="36" height="46" rx="5"/><path d="M24 10V6h16v4"/><path d="M22 26h20M22 34h20M22 42h12"/><path d="M44 40c4 0 6 3 6 6s-3 6-6 6"/></svg>'
 };
 
@@ -285,6 +288,7 @@ if(!S.sitesAt)DEFAULT_SITES.forEach((n,i)=>{const id='s'+(i+1);if(!S.sites.find(
 if(Array.isArray(S.operators)&&S.operators.length)OPS.splice(0,OPS.length,...S.operators);
 if(!isNum(S.dieselPrice))S.dieselPrice=101.80;
 if(!Array.isArray(S.priceHistory))S.priceHistory=[{price:101.80,from:'2026-01-01',user:''}];
+if(!Array.isArray(S.petrolHistory))S.petrolHistory=[{price:108.68,from:'2026-01-01',user:''}];
 function saveS(){localStorage.setItem('fr_settings',JSON.stringify(S))}
 saveS();
 const siteById=id=>S.sites.find(s=>s.id===id);
@@ -300,6 +304,8 @@ function applySiteConfig(rec){
   S.sites=rec.data.sites;S.sitesAt=rec.updatedAt||Date.now();
   if(Array.isArray(rec.data.operators)&&rec.data.operators.length){S.operators=rec.data.operators;OPS.splice(0,OPS.length,...rec.data.operators)}
   if(isNum(rec.data.dieselPrice))S.dieselPrice=+rec.data.dieselPrice;
+  if(Array.isArray(rec.data.petrolHistory)){const autos=(S.petrolHistory||[]).filter(p=>p.auto&&!rec.data.petrolHistory.some(x=>x.from===p.from));S.petrolHistory=rec.data.petrolHistory.concat(autos)}
+  if(rec.data.travel)S.travel=rec.data.travel;
   if(Array.isArray(rec.data.priceHistory)){const autos=(S.priceHistory||[]).filter(p=>p.auto&&!rec.data.priceHistory.some(x=>x.from===p.from));S.priceHistory=rec.data.priceHistory.concat(autos)}
   saveS();return true;
 }
@@ -307,7 +313,7 @@ function applySiteConfig(rec){
 function freezeSiteOps(){S.sites.forEach(st=>{if(!Array.isArray(st.ops)||!st.ops.length)st.ops=OPS.slice()})}
 const cleanName=t=>String(t||'').trim().replace(/[.#$\[\]\/<>"'`\\]/g,'').slice(0,30);
 async function saveSiteConfig(){
-  const rec={id:'config-sites',type:'config',site:'',siteName:'',dt:nowLocal(),user:S.user,createdAt:Date.now(),deleted:false,data:{sites:JSON.parse(JSON.stringify(S.sites)),operators:OPS.slice(),dieselPrice:S.dieselPrice,priceHistory:S.priceHistory},src:{}};
+  const rec={id:'config-sites',type:'config',site:'',siteName:'',dt:nowLocal(),user:S.user,createdAt:Date.now(),deleted:false,data:{sites:JSON.parse(JSON.stringify(S.sites)),operators:OPS.slice(),petrolHistory:S.petrolHistory,travel:S.travel||null,dieselPrice:S.dieselPrice,priceHistory:S.priceHistory},src:{}};
   await putRec(rec);S.sitesAt=rec.updatedAt;saveS();
 }
 const siteName=id=>(siteById(id)||{}).name||id;
@@ -328,7 +334,7 @@ async function putRec(rec,{fromRemote=false}={}){
   await DB.put(rec);
   const i=RECS.findIndex(r=>r.id===rec.id);if(i>=0)RECS[i]=rec;else RECS.push(rec);
   if(!fromRemote){Sync.push()}
-  else if(rec.type==='config'&&applySiteConfig(rec)&&!/^#\/(diesel|energy|request|stock)\/|^#\/msg/.test(location.hash))setTimeout(route,0);
+  else if(rec.type==='config'&&applySiteConfig(rec)&&!/^#\/(diesel|energy|request|stock|travel)\/|^#\/msg/.test(location.hash))setTimeout(route,0);
   status();
 }
 
@@ -390,7 +396,7 @@ async init(){
         if(!S.user){S.user=ACCOUNT.name;saveS()}
         if(!localStorage.getItem('fr_migrated_'+u.uid))await this.migrate(u);
         this.ready=true;this.err='';this.needLogin=false;this.listen();await this.push();
-        if(location.hash==='#/login')location.hash='#/';else if(!/^#\/(diesel|energy|request|stock)\/|^#\/msg/.test(location.hash))route();
+        if(location.hash==='#/login')location.hash='#/';else if(!/^#\/(diesel|energy|request|stock|travel)\/|^#\/msg/.test(location.hash))route();
       }else{
         this.ready=false;if(this.unsub){this.unsub();this.unsub=null}
         // keep the cached account so the app opens normally; just flag that sync needs a sign-in
@@ -441,7 +447,7 @@ listen(){
       if(!loc||(loc.updatedAt||0)<(d.updatedAt||0)){await putRec(d,{fromRemote:true});changed=true}
     }
     localStorage.setItem('fr_lastPull',max);
-    if(changed&&!/^#\/(diesel|energy|request|stock)\/|^#\/msg/.test(location.hash))route();
+    if(changed&&!/^#\/(diesel|energy|request|stock|travel)\/|^#\/msg/.test(location.hash))route();
   },e=>{this.err=/permission/i.test(e.message)?'This Gmail ID is not allowed. Ask the admin to add it.':e.message;status();if(location.hash==='#/settings')Settings()});
 },
 async push(){
@@ -502,6 +508,7 @@ function route(){
   if(a==='msg')return MsgPage();
   if(a==='stock')return b?StockSite(b):StockHome();
   if(a==='stockreport')return StockReport();
+  if(a==='travel')return TravelPage();
   if(a==='dash')return Dashboard();
   if(a==='history')return History();
   if(a==='settings')return Settings();
@@ -565,6 +572,7 @@ function Home(){
     <button class="mcard m-b" onclick="location.hash='#/energy'"><div class="ic">${I.meter}</div><div><b>Energy Reading</b><span>EB meter and operator readings</span></div><span class="ar">${I.chev}</span></button>
     <button class="mcard m-o" onclick="location.hash='#/request'"><div class="ic">${I.wa}</div><div><b>Make Diesel Request Message</b><span>Generate and share via WhatsApp</span></div><span class="ar">${I.chev}</span></button>
     <button class="mcard m-t" onclick="location.hash='#/stock'"><div class="ic">${I.barrel}</div><div><b>Diesel Stock Management</b><span>Allocation, purchases, transfers &amp; reports</span></div><span class="ar">${I.chev}</span></button>
+    <button class="mcard m-p" onclick="location.hash='#/travel'"><div class="ic">${I.scooter}</div><div><b>Travel &amp; Fuel</b><span>Scooter km, petrol fill-ups &amp; mileage</span></div><span class="ar">${I.chev}</span></button>
   </div>
   <div class="qs"><div><b>${activeSites().length}</b><span>Sites</span></div><div><b>${tD}</b><span>Diesel today</span></div><div><b>${tE}</b><span>Energy today</span></div></div>
   ${!S.user?`<div class="wrap" style="padding-top:0"><div class="note">Tip: set your name in <a href="#/settings">Settings</a> so records show who entered them.</div></div>`:''}
@@ -1042,19 +1050,29 @@ function priceUrls(){
   if(m&&repo&&!/\.html?$/.test(repo)){u.push(`https://raw.githubusercontent.com/${m[1]}/${repo}/main/price.json`,`https://raw.githubusercontent.com/${m[1]}/${repo}/master/price.json`)}
   u.push('price.json');return u;
 }
+function applyAuto(listKey,infoKey,o){
+  if(!o||!(+o.price>50&&+o.price<200)||!/^\d{4}-\d{2}-\d{2}$/.test(o.date||''))return false;
+  S[infoKey]={price:+o.price,date:o.date,source:o.source||'online',confirmed:!!o.confirmed,checked:Date.now()};
+  const L=S[listKey]||[];const exists=L.some(p=>p.from===o.date&&(!p.auto||Math.abs(p.price-o.price)<0.001));
+  if(!exists)S[listKey]=L.filter(p=>!(p.auto&&p.from===o.date)).concat([{price:+o.price,from:o.date,user:'Auto · '+(o.source||'online'),auto:true,at:Date.now()}]);
+  return !exists;
+}
 async function autoPrice(force){
-  if(S.autoPrice===false||!navigator.onLine)return null;
-  if(!force&&localStorage.getItem('fr_priceChk')===today()&&S.autoInfo)return S.autoInfo;
+  const wantD=S.autoPrice!==false,wantP=S.autoPetrol!==false;
+  if((!wantD&&!wantP)||!navigator.onLine)return null;
+  if(!force&&localStorage.getItem('fr_priceChk')===today()&&(S.autoInfo||S.autoPetrolInfo))return S.autoInfo;
   for(const u of priceUrls()){
     try{
       const r=await fetch(u+'?t='+Date.now(),{cache:'no-store'});if(!r.ok)continue;
-      const j=await r.json();if(!(+j.price>50&&+j.price<200)||!/^\d{4}-\d{2}-\d{2}$/.test(j.date||''))continue;
-      S.autoInfo={price:+j.price,date:j.date,source:j.source||'online',confirmed:!!j.confirmed,checked:Date.now()};
+      const j=await r.json();
+      const dsl=j.diesel||(j.price?{price:j.price,date:j.date,source:j.source,confirmed:j.confirmed}:null);
+      let changed=false;
+      if(wantD&&applyAuto('priceHistory','autoInfo',dsl))changed=true;
+      if(wantP&&applyAuto('petrolHistory','autoPetrolInfo',j.petrol))changed=true;
+      if(!S.autoInfo&&!S.autoPetrolInfo)continue;
       localStorage.setItem('fr_priceChk',today());
-      const exists=(S.priceHistory||[]).some(p=>p.from===j.date&&(!p.auto||Math.abs(p.price-j.price)<0.001));
-      if(!exists)S.priceHistory=(S.priceHistory||[]).filter(p=>!(p.auto&&p.from===j.date)).concat([{price:+j.price,from:j.date,user:'Auto · '+(j.source||'online'),auto:true,at:Date.now()}]);
-      S.dieselPrice=priceOn(today());saveS();
-      if(!exists&&/^#\/stock/.test(location.hash||''))route();
+      S.dieselPrice=priceOn(today());S.petrolPrice=petrolOn(today());saveS();
+      if(changed&&/^#\/(stock|travel)/.test(location.hash||'')&&!$('#modal .bg'))route();
       return S.autoInfo;
     }catch(e){}
   }
@@ -1392,6 +1410,304 @@ function StockReport(){
   $('#mrw').onclick=()=>window.open(`https://wa.me/?text=${encodeURIComponent(txt())}`,'_blank');
 }
 
+/* ================= TRAVEL & FUEL (scooter) ================= */
+/* km from Google Maps Timeline export + manual entries; petrol fill-ups; estimated vs real mileage.
+   Records: type 'travel' kind 'timeline' (one per day, id tl-YYYY-MM-DD) | kind 'manual'
+            type 'fuel'   (petrol fill-up)                                                     */
+const TV_DEFAULT_TYPES=['motorcycling','in passenger vehicle','in vehicle','driving','in two wheeler','unknown'];
+function travelCfg(){const t=S.travel||{};return {mileage:isNum(t.mileage)&&+t.mileage>0?+t.mileage:45,vehicle:t.vehicle||'Scooter',types:Array.isArray(t.types)?t.types:TV_DEFAULT_TYPES.slice()}}
+function petrolOn(day){const h=(S.petrolHistory||[]).filter(p=>p.from<=day).sort((a,b)=>a.from<b.from?-1:a.from>b.from?1:((a.auto?0:1)-(b.auto?0:1))||((a.at||0)-(b.at||0)));return h.length?+h[h.length-1].price:+(S.petrolPrice||108.68)}
+const tvRecs=()=>live().filter(r=>r.type==='travel');
+const fuelRecs=()=>live().filter(r=>r.type==='fuel').sort((a,b)=>a.dt<b.dt?-1:a.dt>b.dt?1:0);
+const normType=t=>String(t||'unknown').toLowerCase().replace(/_/g,' ').replace(/\s+/g,' ').trim();
+const typeLabel=t=>t.replace(/\b\w/g,c=>c.toUpperCase());
+function kmOfDay(day,recs){
+  recs=recs||tvRecs();const types=travelCfg().types;let tl=0,man=0;const trips=[];
+  recs.forEach(r=>{if(r.data.day!==day)return;
+    if(r.data.kind==='timeline')(r.data.trips||[]).forEach((t,i)=>{const inc=types.includes(t.type)&&!t.x;if(inc)tl+=t.km;trips.push({...t,inc,rec:r,i})});
+    else{man+=+r.data.km||0}});
+  return {tl:r2(tl),man:r2(man),km:r2(tl+man),trips};
+}
+function travelDays(from,to){
+  const recs=tvRecs(),days={};
+  recs.forEach(r=>{const d=r.data.day;if(d>=from&&d<=to)days[d]=1});
+  fuelRecs().forEach(r=>{const d=dayOf(r.dt);if(d>=from&&d<=to)days[d]=1});
+  const mil=travelCfg().mileage;
+  return Object.keys(days).sort().map(d=>{const k=kmOfDay(d,recs);const L=r2(k.km/mil),p=petrolOn(d);
+    const fills=fuelRecs().filter(f=>dayOf(f.dt)===d);
+    return {day:d,...k,estL:L,estR:r2(L*p),price:p,fillL:r2(fills.reduce((s,f)=>s+(+f.data.litres||0),0)),fillR:r2(fills.reduce((s,f)=>s+(+f.data.amount||0),0))}});
+}
+/* real mileage between fill-ups: full-tank method with odometer, else approx from recorded km */
+function realMileage(){
+  const fills=fuelRecs();const out=[];
+  let last=null,litresSince=0;
+  fills.forEach(f=>{
+    const d=f.data;
+    if(last){litresSince+=+d.litres||0}
+    if(d.full!==false){
+      if(last){
+        const L=litresSince;let km=null,how='';
+        if(isNum(d.odo)&&isNum(last.data.odo)&&+d.odo>+last.data.odo){km=r2(+d.odo-+last.data.odo);how='odometer'}
+        else{let s=0;const a=dayOf(last.dt),b=dayOf(f.dt);let x=a;while(x<b){s+=kmOfDay(x).km;x=addDays(x,1)}if(s>0){km=r2(s);how='timeline / manual km'}}
+        if(km&&L>0)out.push({id:f.id,from:last.dt,to:f.dt,km,litres:r2(L),mileage:r2(km/L),how});
+      }
+      last=f;litresSince=0;
+    }
+  });
+  return out;
+}
+
+/* ---------- page ---------- */
+const TV={month:''};
+function TravelPage(){
+  autoPrice();
+  TV.month=TV.month||today().slice(0,7);
+  const [a,b]=monthRange(TV.month);const cfg=travelCfg();
+  const days=travelDays(a,b);
+  const T=days.reduce((s,d)=>{['km','tl','man','estL','estR','fillL','fillR'].forEach(k=>s[k]=r2((s[k]||0)+d[k]));return s},{});
+  const RM=realMileage();const rmMonth=RM.filter(x=>dayOf(x.to)>=a&&dayOf(x.to)<=b);
+  const avgReal=(arr)=>{const km=arr.reduce((s,x)=>s+x.km,0),L=arr.reduce((s,x)=>s+x.litres,0);return L>0?r2(km/L):null};
+  const realM=avgReal(rmMonth)??avgReal(RM);
+  const lastImp=tvRecs().filter(r=>r.data.kind==='timeline').map(r=>r.data.day).sort().pop();
+  const pi=S.autoPetrolInfo;
+  const fills=fuelRecs().filter(f=>dayOf(f.dt)>=a&&dayOf(f.dt)<=b).reverse();
+  render(header('Travel & Fuel','#/')+`<div class="wrap">
+    <div class="filters" style="grid-template-columns:1fr"><input class="sel" type="month" id="tvm" value="${TV.month}"></div>
+    <div class="tiles">
+      <div class="tile" style="background:var(--pl)"><div class="ti" style="background:var(--pp)">${I.scooter}</div><div><span>Distance</span><b>${fmtN(T.km||0,1)} km</b><small style="display:block;color:var(--m)">${days.filter(d=>d.km>0).length} travel days</small></div></div>
+      <div class="tile" style="background:var(--ol)"><div class="ti" style="background:var(--o)">${I.fuel}</div><div><span>Petrol used (est.)</span><b>${fmtN(T.estL||0,2)} L</b><small style="display:block;color:var(--m)">${fmtRs(T.estR||0)}</small></div></div>
+      <div class="tile" style="background:var(--gl)"><div class="ti" style="background:var(--g1)">₹</div><div><span>Petrol filled</span><b>${fmtN(T.fillL||0,2)} L</b><small style="display:block;color:var(--m)">${fmtRs(T.fillR||0)}</small></div></div>
+      <div class="tile" style="background:var(--bl)"><div class="ti" style="background:var(--b)">${I.clock}</div><div><span>Real mileage</span><b>${realM?fmtN(realM,1)+' km/l':'—'}</b><small style="display:block;color:var(--m)">set: ${fmtN(cfg.mileage,1)} km/l</small></div></div>
+    </div>
+    <button class="rec" onclick="editPetrol()" style="margin-bottom:8px"><span class="tg" style="background:var(--ol);color:#b65400">PETROL</span><span class="mid"><b>${fmtRs(petrolOn(today()))} / L today</b><small>${S.autoPetrol===false?'Auto update OFF · manual price':pi?`Auto · Kanyakumari ${fmtD(pi.date)} · ${esc(pi.source)}`:'Auto update on · waiting for price'}</small></span><span class="ar" style="width:18px;color:#9aa6a0">${I.chev}</span></button>
+    <button class="rec" onclick="editMileage()" style="margin-bottom:12px"><span class="tg" style="background:var(--pl);color:var(--pp)">MILEAGE</span><span class="mid"><b>${esc(cfg.vehicle)} · ${fmtN(cfg.mileage,1)} km/l</b><small>Tap to change mileage and which Timeline trips count</small></span><span class="ar" style="width:18px;color:#9aa6a0">${I.chev}</span></button>
+    <div class="btns" style="margin:0 0 8px"><button class="btn b-p" onclick="importTimeline()">${I.upload}Import Timeline</button></div>
+    <div class="hint" style="margin:-2px 0 10px;text-align:center">${lastImp?`Timeline imported up to <b>${fmtD(lastImp)}</b>`:'No Timeline imported yet'} · <a href="javascript:timelineHelp()">How to export on iPhone</a></div>
+    <div class="btns" style="margin:0 0 14px"><button class="btn b-gr" onclick="addKm()">+ Add km</button><button class="btn b-g" onclick="addFill()">${I.fuel}Petrol fill-up</button></div>
+    <div class="sec-t">Day-wise (${new Date(a+'T00:00').toLocaleString('en-IN',{month:'long',year:'numeric'})})</div>
+    ${days.length?`<div class="scroll"><table class="tbl"><tr><th>Date</th><th class="r">Km</th><th class="r">Est. L</th><th class="r">Est. ₹</th><th class="r">Filled</th></tr>
+      ${days.slice().reverse().map(d=>`<tr data-day="${d.day}" style="cursor:pointer"><td>${fmtD(d.day).slice(0,5)}<br><small style="color:var(--m)">${d.man&&d.tl?'timeline+manual':d.man?'manual':d.tl?'timeline':''}</small></td><td class="r"><b>${fmtN(d.km,1)}</b></td><td class="r">${fmtN(d.estL,2)}</td><td class="r">${fmtRs(d.estR)}</td><td class="r">${d.fillL?`${fmtN(d.fillL,2)} L<br><small>${fmtRs(d.fillR)}</small>`:'—'}</td></tr>`).join('')}
+      <tr style="font-weight:800;background:var(--gl)"><td>TOTAL</td><td class="r">${fmtN(T.km,1)}</td><td class="r">${fmtN(T.estL,2)}</td><td class="r">${fmtRs(T.estR)}</td><td class="r">${fmtN(T.fillL,2)} L<br><small>${fmtRs(T.fillR)}</small></td></tr></table></div>
+      <div class="hint" style="margin:-6px 0 12px">Est. petrol = km ÷ ${fmtN(cfg.mileage,1)} km/l × that day's petrol price. Tap a day for its trips.</div>`:'<div class="empty">No travel or fill-ups this month.<br>Import your Timeline or add km manually.</div>'}
+    <div class="sec-t">Petrol fill-ups</div>
+    ${fills.length?fills.map(f=>{const d=f.data,m=RM.find(x=>x.id===f.id);return `<button class="rec" data-fill="${f.id}"><span class="tg tg-request">FILL</span><span class="mid"><b>${fmtN(d.litres,2)} L · ${fmtRs(d.amount)}</b><small>${fmtD(f.dt)} · ${fmtRs(d.price)}/L${isNum(d.odo)?' · odo '+fmtN(d.odo,0):''}${d.full===false?' · part fill':''}</small></span><span class="rt">${m?`${fmtN(m.mileage,1)}<br><small style="color:var(--m);font-weight:500">km/l</small>`:''}</span></button>`}).join(''):'<div class="empty" style="padding:14px">No fill-ups this month.</div>'}
+    ${RM.length?`<div class="hint">Real mileage = km between two full-tank fills ÷ litres filled (uses odometer if entered, else Timeline/manual km).</div>`:''}
+    <div class="btns mt"><button class="btn b-gr" id="tvc">${I.copy}Copy summary</button><button class="btn b-g" onclick="exportExcel()">${I.xls}Excel</button></div>
+  </div>`,'home');
+  $('#tvm').onchange=e=>{TV.month=e.target.value||today().slice(0,7);TravelPage()};
+  $$('[data-day]').forEach(tr=>tr.onclick=()=>dayTrips(tr.dataset.day));
+  $$('[data-fill]').forEach(b=>b.onclick=()=>addFill(b.dataset.fill));
+  $('#tvc').onclick=async()=>{const txt=[`TRAVEL & FUEL – ${new Date(a+'T00:00').toLocaleString('en-IN',{month:'long',year:'numeric'})}`,`Vehicle: ${cfg.vehicle} (${cfg.mileage} km/l)`,'',
+    `Distance: ${fmtN(T.km||0,1)} km`,`Petrol used (est.): ${fmtN(T.estL||0,2)} L = ${fmtRs(T.estR||0)}`,`Petrol filled: ${fmtN(T.fillL||0,2)} L = ${fmtRs(T.fillR||0)}`,`Real mileage: ${realM?fmtN(realM,1)+' km/l':'—'}`].join('\n');
+    try{await navigator.clipboard.writeText(txt);toast('Summary copied')}catch(e){toast('Copy failed')}};
+}
+
+/* ---------- settings: mileage + trip types ---------- */
+function editMileage(){
+  const cfg=travelCfg();
+  const seen=new Set(TV_DEFAULT_TYPES);tvRecs().forEach(r=>(r.data.trips||[]).forEach(t=>seen.add(t.type)));
+  ['walking','cycling','in bus','in train','in subway','flying','running','in ferry'].forEach(t=>seen.add(t));
+  modal(`<h3>Vehicle & Mileage</h3>
+    <div class="g2"><div class="setf"><label>Vehicle name</label><input class="sel" id="vn" value="${esc(cfg.vehicle)}"></div>
+    <div class="setf"><label>Mileage (km per litre)</label><input class="sel" id="vm" type="number" step="0.1" inputmode="decimal" value="${cfg.mileage}"></div></div>
+    <div class="setf"><label>Count these Timeline trip types as ${esc(cfg.vehicle)} km</label>
+      <div class="opts" id="vt">${[...seen].map(t=>`<button data-t="${esc(t)}" class="${cfg.types.includes(t)?'on':''}">${esc(typeLabel(t))}</button>`).join('')}</div>
+      <div class="hint">Google usually records a scooter as “In Passenger Vehicle” or “Motorcycling”. Walking, bus and train are not counted.</div></div>
+    <div class="btns"><button class="btn b-gr" onclick="closeModal()">Cancel</button><button class="btn b-g" id="vsave">${I.save}Save</button></div>`);
+  $$('#vt [data-t]').forEach(b=>b.onclick=()=>b.classList.toggle('on'));
+  $('#vsave').onclick=async()=>{const m=+$('#vm').value;if(!(m>0))return toast('Enter mileage in km/l');
+    S.travel={mileage:r2(m),vehicle:$('#vn').value.trim()||'Scooter',types:$$('#vt .on').map(b=>b.dataset.t)};saveS();await saveSiteConfig();closeModal();toast('Saved');route()};
+}
+
+/* ---------- petrol price ---------- */
+function editPetrol(){
+  const h=(S.petrolHistory||[]).slice().sort((a,b)=>a.from<b.from?1:a.from>b.from?-1:(b.at||0)-(a.at||0)).slice(0,60);const ai=S.autoPetrolInfo;
+  modal(`<h3>Petrol Price</h3>
+    <div class="calc" style="margin-top:0"><div class="l"><span>Today's price used</span><b>${fmtRs(petrolOn(today()))} / L</b></div>
+      <div class="l"><span>Auto (Kanyakumari district)</span><b>${ai?`${fmtRs(ai.price)} · ${fmtD(ai.date)}`:'—'}</b></div>
+      ${ai?`<div class="hint" style="margin:2px 0 0">Source: ${esc(ai.source)}${ai.confirmed?' · confirmed by 2 sources':''}</div>`:''}</div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:14px;margin:0 0 6px"><input type="checkbox" id="ppa" ${S.autoPetrol===false?'':'checked'} style="width:20px;height:20px"> Update petrol price automatically every day</label>
+    <button class="btn b-gr" id="ppc" style="width:100%;margin-bottom:12px">${I.sync}Check today's price now</button>
+    <div class="sec-t">Manual price</div>
+    <div class="g2"><div class="setf"><label>Price (₹ / L)</label><input class="sel" id="ppp" type="number" step="0.01" inputmode="decimal" value="${petrolOn(today())}"></div>
+    <div class="setf"><label>Effective from</label><input class="sel" id="ppd" type="date" value="${today()}"></div></div>
+    <div class="hint">Websites and pumps can differ slightly. A manual price for a date always wins over the auto price.</div>
+    <div class="btns"><button class="btn b-gr" onclick="closeModal()">Close</button><button class="btn b-g" id="pps">${I.save}Save Manual Price</button></div>
+    <div class="sec-t mt">Price History</div>
+    <div class="scroll"><table class="tbl"><tr><th>From</th><th class="r">₹ / L</th><th>By</th></tr>${h.map(p=>`<tr><td>${fmtD(p.from)}</td><td class="r">${fmtN(p.price,2)}</td><td>${esc(p.user||'—')}</td></tr>`).join('')}</table></div>`);
+  $('#ppa').onchange=e=>{S.autoPetrol=e.target.checked;saveS();if(S.autoPetrol)autoPrice(true).then(()=>editPetrol());toast(S.autoPetrol?'Auto price ON':'Auto price OFF')};
+  $('#ppc').onclick=async()=>{$('#ppc').disabled=true;await autoPrice(true);const p=S.autoPetrolInfo;toast(p?`Kanyakumari petrol: ${fmtRs(p.price)} (${fmtD(p.date)})`:'Could not get price');editPetrol()};
+  $('#pps').onclick=async()=>{const p=+$('#ppp').value,d=$('#ppd').value;if(!(p>0))return toast('Enter a valid price');if(!d)return toast('Select a date');
+    S.petrolHistory=(S.petrolHistory||[]).filter(x=>!(x.from===d&&!x.auto)).concat([{price:r2(p),from:d,user:S.user||'Manual',at:Date.now()}]);S.petrolPrice=petrolOn(today());saveS();await saveSiteConfig();closeModal();toast('Petrol price saved');route()};
+}
+
+/* ---------- petrol fill-up (₹ or litres) ---------- */
+function addFill(id){
+  const rec=id?RECS.find(r=>r.id===id):null;const d=rec?rec.data:{};
+  const day0=rec?dayOf(rec.dt):today();let mode=d.mode==='amount'?'amount':'litres';
+  const lastOdo=fuelRecs().filter(f=>f.id!==id&&isNum(f.data.odo)).pop();
+  modal(`<h3>${rec?'Edit':'Add'} Petrol Fill-up</h3>
+    <div class="g2"><div class="setf"><label>Date</label><input class="sel" type="date" id="fd" value="${day0}" max="${today()}"></div>
+    <div class="setf"><label>Price ₹ / L</label><input class="sel" type="number" step="0.01" inputmode="decimal" id="fp" value="${d.price??petrolOn(day0)}"></div></div>
+    <div class="tabs"><button data-fm="litres">Enter Litres</button><button data-fm="amount">Enter Amount ₹</button></div>
+    <div class="setf" id="fqb"><label>Litres filled</label><input class="inp" type="number" step="any" inputmode="decimal" id="fq" value="${d.litres??''}"></div>
+    <div class="setf" id="fab"><label>Amount paid (₹)</label><input class="inp" type="number" step="any" inputmode="decimal" id="fa" value="${d.amount??''}"></div>
+    <div class="calc" id="fc"></div>
+    <div class="g2"><div class="setf"><label>Odometer (km) – optional</label><input class="sel" type="number" inputmode="numeric" id="fo" value="${d.odo??''}" placeholder="${lastOdo?'last '+lastOdo.data.odo:''}"></div>
+    <div class="setf"><label>&nbsp;</label><label style="display:flex;align-items:center;gap:8px;font-size:14px;height:44px"><input type="checkbox" id="ff" ${d.full===false?'':'checked'} style="width:20px;height:20px"> Full tank</label></div></div>
+    <div class="setf"><label>Remarks</label><input class="sel" id="fr" value="${esc(d.remarks||'')}" placeholder="Optional (pump name…)"></div>
+    <div class="hint">For real mileage: fill the tank full each time and note the odometer.</div>
+    <div class="btns">${rec?'<button class="btn b-r" id="fdel">Delete</button>':''}<button class="btn b-gr" onclick="closeModal()">Cancel</button><button class="btn b-g" id="fs">${I.save}Save</button></div>`);
+  const calc=()=>{const p=+$('#fp').value;let L,A;
+    $$('[data-fm]').forEach(b=>b.classList.toggle('on',b.dataset.fm===mode));
+    $('#fqb').style.display=mode==='litres'?'':'none';$('#fab').style.display=mode==='amount'?'':'none';
+    if(mode==='litres'){L=+$('#fq').value;A=L&&p?r2(L*p):0}else{A=+$('#fa').value;L=A&&p?r2(A/p):0}
+    $('#fc').innerHTML=`<div class="l"><span>Litres</span><b>${fmtN(L||0,2)} L</b></div><div class="l tot"><span>Amount</span><b>${fmtRs(A||0)}</b></div>`;return {L,A,p}};
+  $$('[data-fm]').forEach(b=>b.onclick=()=>{mode=b.dataset.fm;calc()});
+  ['#fq','#fa','#fp'].forEach(x=>$(x).oninput=calc);
+  $('#fd').onchange=()=>{if(!rec)$('#fp').value=petrolOn($('#fd').value||today());calc()};
+  calc();
+  if($('#fdel'))$('#fdel').onclick=async()=>{if(!confirm('Delete this fill-up?'))return;rec.deleted=true;await putRec(rec);closeModal();toast('Deleted');route()};
+  $('#fs').onclick=async()=>{const v=calc(),day=$('#fd').value;if(!day)return toast('Select date');if(!(v.L>0))return toast(mode==='amount'?'Enter amount':'Enter litres');if(!(v.p>0))return toast('Enter price');
+    const odo=$('#fo').value.trim();
+    if(odo&&lastOdo&&+odo<+lastOdo.data.odo&&dayOf(lastOdo.dt)<=day&&!confirm(`Odometer ${odo} is lower than last fill (${lastOdo.data.odo}). Save anyway?`))return;
+    const data={litres:r2(v.L),amount:r2(v.A),price:r2(v.p),mode,odo:odo===''?'':+odo,full:$('#ff').checked,remarks:$('#fr').value.trim()};
+    const r=rec||{id:uid(),type:'fuel',site:'',siteName:'',user:S.user,email:ACCOUNT?ACCOUNT.email:'',createdAt:Date.now(),deleted:false,src:{}};
+    if(rec)r.history=(r.history||[]).concat([{at:Date.now(),user:S.user,dt:r.dt,data:r.data}]);
+    r.dt=rec&&dayOf(rec.dt)===day?rec.dt:dtFor(day);r.data=data;
+    await putRec(r);closeModal();toast('Fill-up saved');route()};
+}
+
+/* ---------- manual km ---------- */
+function addKm(id,dayPre){
+  const rec=id?RECS.find(r=>r.id===id):null;const d=rec?rec.data:{};let mode=isNum(d.odoStart)&&d.odoStart!==''?'odo':'km';
+  modal(`<h3>${rec?'Edit':'Add'} Km (manual)</h3>
+    <div class="setf"><label>Date</label><input class="sel" type="date" id="kd" value="${d.day||dayPre||today()}" max="${today()}"></div>
+    <div class="tabs"><button data-km="km">Enter km</button><button data-km="odo">Odometer start / end</button></div>
+    <div class="setf" id="kkb"><label>Kilometres travelled</label><input class="inp" type="number" step="any" inputmode="decimal" id="kk" value="${d.km??''}"></div>
+    <div class="g2" id="kob"><div class="setf"><label>Odometer start</label><input class="sel" type="number" inputmode="numeric" id="ks" value="${d.odoStart??''}"></div><div class="setf"><label>Odometer end</label><input class="sel" type="number" inputmode="numeric" id="ke" value="${d.odoEnd??''}"></div></div>
+    <div class="setf"><label>Purpose / site (optional)</label><input class="sel" id="kp" list="ksites" value="${esc(d.purpose||'')}"><datalist id="ksites">${activeSites().map(s=>`<option value="${esc(s.name)}">`).join('')}</datalist></div>
+    <div class="hint">Manual km is added to any Timeline km for that day.</div>
+    <div class="btns">${rec?'<button class="btn b-r" id="kdel">Delete</button>':''}<button class="btn b-gr" onclick="closeModal()">Cancel</button><button class="btn b-g" id="ksv">${I.save}Save</button></div>`);
+  const upd=()=>{$$('[data-km]').forEach(b=>b.classList.toggle('on',b.dataset.km===mode));$('#kkb').style.display=mode==='km'?'':'none';$('#kob').style.display=mode==='odo'?'':'none'};
+  $$('[data-km]').forEach(b=>b.onclick=()=>{mode=b.dataset.km;upd()});upd();
+  if($('#kdel'))$('#kdel').onclick=async()=>{if(!confirm('Delete this entry?'))return;rec.deleted=true;await putRec(rec);closeModal();toast('Deleted');route()};
+  $('#ksv').onclick=async()=>{const day=$('#kd').value;if(!day)return toast('Select date');let km,os='',oe='';
+    if(mode==='km'){km=+$('#kk').value}else{os=+$('#ks').value;oe=+$('#ke').value;km=oe-os;if(!(os>0&&oe>0))return toast('Enter both odometer readings')}
+    if(!(km>0))return toast(mode==='odo'?'End must be more than start':'Enter km');
+    const r=rec||{id:uid(),type:'travel',site:'',siteName:'',user:S.user,email:ACCOUNT?ACCOUNT.email:'',createdAt:Date.now(),deleted:false,src:{}};
+    r.dt=dtFor(day);r.data={kind:'manual',day,km:r2(km),odoStart:os,odoEnd:oe,purpose:$('#kp').value.trim()};
+    await putRec(r);closeModal();toast('Km saved');route()};
+}
+
+/* ---------- one day: trips ---------- */
+function dayTrips(day){
+  const k=kmOfDay(day);const man=tvRecs().filter(r=>r.data.kind==='manual'&&r.data.day===day);const mil=travelCfg().mileage,p=petrolOn(day);
+  modal(`<h3>${fmtD(day)} · ${fmtN(k.km,1)} km</h3>
+    <div class="dl" style="margin-top:0"><span>Timeline km</span><b>${fmtN(k.tl,1)}</b><span>Manual km</span><b>${fmtN(k.man,1)}</b><span>Petrol (est.)</span><b>${fmtN(k.km/mil,2)} L · ${fmtRs(r2(k.km/mil*p))}</b><span>Petrol price</span><b>${fmtRs(p)}/L</b></div>
+    ${k.trips.length?`<div class="sec-t">Timeline trips</div><div class="scroll"><table class="tbl"><tr><th>Time</th><th>Type</th><th class="r">Km</th><th></th></tr>${k.trips.map(t=>`<tr style="${t.inc?'':'color:#aab4ae'}"><td>${t.s}–${t.e}</td><td>${esc(typeLabel(t.type))}</td><td class="r">${fmtN(t.km,1)}</td><td class="r"><button class="btn b-gr" style="padding:4px 8px;font-size:11px" data-tx="${t.rec.id}|${t.i}">${t.x?'Include':t.inc?'Exclude':'—'}</button></td></tr>`).join('')}</table></div>
+      <div class="hint" style="margin-top:-6px">Grey trips are not counted (walking, bus… or excluded).</div>`:''}
+    ${man.length?`<div class="sec-t">Manual entries</div>${man.map(r=>`<button class="rec" data-man="${r.id}"><span class="tg tg-energy">KM</span><span class="mid"><b>${fmtN(r.data.km,1)} km</b><small>${r.data.odoStart!==''&&isNum(r.data.odoStart)?`odo ${r.data.odoStart} → ${r.data.odoEnd} · `:''}${esc(r.data.purpose||'')}</small></span></button>`).join('')}`:''}
+    <div class="btns"><button class="btn b-gr" onclick="closeModal()">Close</button><button class="btn b-g" onclick="addKm(null,'${day}')">+ Add km</button></div>`);
+  $$('[data-tx]').forEach(b=>b.onclick=async()=>{const [rid,i]=b.dataset.tx.split('|');const r=RECS.find(x=>x.id===rid);const t=r.data.trips[+i];if(!t.x&&!travelCfg().types.includes(t.type))return;t.x=!t.x;if(!t.x)delete t.x;await putRec(r);dayTrips(day);if(location.hash==='#/travel')TravelPage(),dayTrips(day)});
+  $$('[data-man]').forEach(b=>b.onclick=()=>addKm(b.dataset.man));
+}
+
+/* ---------- Google Maps Timeline import ---------- */
+function timelineHelp(){
+  modal(`<h3>Export Timeline on iPhone</h3>
+    <ol style="padding-left:18px;line-height:1.7;font-size:14px;margin:0 0 10px">
+    <li>Open <b>Google Maps</b> and tap your <b>profile picture</b> (top-right).</li>
+    <li>Tap <b>Settings</b> → <b>Personal content</b>.</li>
+    <li>Tap <b>Export Timeline data</b>.</li>
+    <li>Choose <b>Save to Files</b> → <b>On My iPhone</b> → Save. The file is called <b>Timeline.json</b>.</li>
+    <li>Come back here → <b>Import Timeline</b> → pick that file.</li></ol>
+    <div class="note">Timeline must be ON in Google Maps (profile → Your Timeline). Google keeps Timeline only on the phone, so no app can read it automatically — export and import once a week or month. Importing the same days again replaces them, so nothing is counted twice.</div>
+    <button class="btn b-gr" style="width:100%" onclick="closeModal()">OK</button>`);
+}
+const pad15=n=>String(n).padStart(15,'0');
+function parsePoint(p){
+  if(!p)return null;
+  if(typeof p==='object'){if(p.latLng)return parsePoint(p.latLng);if(isNum(p.latitudeE7))return [p.latitudeE7/1e7,p.longitudeE7/1e7];if(isNum(p.latE7))return [p.latE7/1e7,p.lngE7/1e7];if(isNum(p.latitude))return [+p.latitude,+p.longitude];if(isNum(p.lat))return [+p.lat,+(p.lng??p.lon)];return null}
+  const m=String(p).replace('geo:','').replace(/°/g,'').split(',').map(x=>parseFloat(x));return m.length>=2&&isFinite(m[0])&&isFinite(m[1])?[m[0],m[1]]:null;
+}
+function hav(a,b){const R=6371,t=x=>x*Math.PI/180;const dLa=t(b[0]-a[0]),dLo=t(b[1]-a[1]);const h=Math.sin(dLa/2)**2+Math.cos(t(a[0]))*Math.cos(t(b[0]))*Math.sin(dLo/2)**2;return 2*R*Math.asin(Math.sqrt(h))}
+function localParts(iso){const d=new Date(iso);if(isNaN(d))return null;return {day:`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`,hm:`${pad(d.getHours())}:${pad(d.getMinutes())}`,t:d.getTime()}}
+function parseTimeline(j){
+  const segs=[],paths=[];
+  const arr=Array.isArray(j)?j:Array.isArray(j?.semanticSegments)?j.semanticSegments:null;
+  if(arr){
+    arr.forEach(x=>{if(Array.isArray(x.timelinePath)){const st=new Date(x.startTime).getTime();x.timelinePath.forEach(p=>{const pt=parsePoint(p.point);const t=p.time?new Date(p.time).getTime():st+(+p.durationMinutesOffsetFromStartTime||0)*60000;if(pt&&isFinite(t))paths.push({t,pt})})}});
+    paths.sort((a,b)=>a.t-b.t);
+    arr.forEach(x=>{const a=x.activity;if(!a||!x.startTime)return;
+      const s=localParts(x.startTime),e=localParts(x.endTime||x.startTime);if(!s)return;
+      let km=parseFloat(a.distanceMeters)/1000,est=false;
+      if(!(km>0)){const pts=paths.filter(p=>p.t>=s.t&&p.t<=e.t).map(p=>p.pt);const A=parsePoint(a.start),B=parsePoint(a.end);const all=[A,...pts,B].filter(Boolean);
+        km=0;for(let i=1;i<all.length;i++)km+=hav(all[i-1],all[i]);est=true}
+      segs.push({day:s.day,s:s.hm,e:e.hm,type:normType(a.topCandidate?.type||a.type),km:r2(km||0),est})});
+  }else if(Array.isArray(j?.timelineObjects)){
+    j.timelineObjects.forEach(o=>{const a=o.activitySegment;if(!a)return;const du=a.duration||{};
+      const st=du.startTimestamp||(du.startTimestampMs&&new Date(+du.startTimestampMs).toISOString()),et=du.endTimestamp||(du.endTimestampMs&&new Date(+du.endTimestampMs).toISOString())||st;
+      const s=localParts(st),e=localParts(et);if(!s)return;
+      let km=(+a.distance||+a.waypointPath?.distanceMeters||0)/1000,est=false;
+      if(!(km>0)){const A=parsePoint(a.startLocation),B=parsePoint(a.endLocation);km=A&&B?hav(A,B):0;est=true}
+      segs.push({day:s.day,s:s.hm,e:e.hm,type:normType(a.activityType||a.activities?.[0]?.activityType),km:r2(km),est})});
+  }else if(Array.isArray(j?.locations)){throw new Error('This is Records.json (raw GPS points, no trips). Please export Timeline from the Google Maps app instead.')}
+  else throw new Error('Not a Google Maps Timeline file.');
+  return segs.filter(x=>x.km>0);
+}
+function importTimeline(){
+  const inp=document.createElement('input');inp.type='file';inp.accept='.json,application/json';
+  inp.onchange=async()=>{
+    const f=inp.files[0];if(!f)return;
+    modal(`<h3>Import Timeline</h3><div class="loader"><div class="spin"></div>Reading ${esc(f.name)} (${fmtN(f.size/1048576,1)} MB)…</div>`);
+    let segs;
+    try{const txt=await f.text();segs=parseTimeline(JSON.parse(txt))}
+    catch(e){return modal(`<h3>Import Timeline</h3><div class="warn">${I.alert}<span>${esc(e.message.includes('JSON')?'This file could not be read. Pick the Timeline.json exported from Google Maps.':e.message)}</span></div><button class="btn b-gr" style="width:100%" onclick="closeModal()">Close</button>`)}
+    if(!segs.length)return modal(`<h3>Import Timeline</h3><div class="empty">No trips with distance found in this file.</div><button class="btn b-gr" style="width:100%" onclick="closeModal()">Close</button>`);
+    const days=segs.map(s=>s.day).sort();const first=days[0],last=days[days.length-1];
+    const lastImp=tvRecs().filter(r=>r.data.kind==='timeline').map(r=>r.data.day).sort().pop();
+    let from=lastImp&&lastImp>=first&&lastImp<=last?lastImp:(addDays(today(),-90)>first?addDays(today(),-90):first);
+    const types=travelCfg().types;
+    const show=()=>{
+      const fr=$('#imf').value||first,to=$('#imt').value||last;
+      const sel=segs.filter(s=>s.day>=fr&&s.day<=to);const by={};sel.forEach(s=>{by[s.type]=by[s.type]||{n:0,km:0};by[s.type].n++;by[s.type].km+=s.km});
+      const cur=$$('#imtypes .on').map(b=>b.dataset.t);const inc=cur.length||$('#imtypes').dataset.init?cur:types;
+      $('#imtypes').dataset.init=1;
+      $('#imtypes').innerHTML=Object.entries(by).sort((a,b)=>b[1].km-a[1].km).map(([t,v])=>`<button data-t="${esc(t)}" class="${inc.includes(t)?'on':''}">${esc(typeLabel(t))} · ${fmtN(v.km,1)} km</button>`).join('');
+      $$('#imtypes [data-t]').forEach(b=>b.onclick=()=>{b.classList.toggle('on');sum()});
+      sum();
+      function sum(){const on=$$('#imtypes .on').map(b=>b.dataset.t);const km=sel.filter(s=>on.includes(s.type)).reduce((a,s)=>a+s.km,0);const nd=new Set(sel.map(s=>s.day)).size;
+        $('#imsum').innerHTML=`<div class="l"><span>Days in range</span><b>${nd}</b></div><div class="l"><span>Trips</span><b>${sel.length}</b></div><div class="l tot"><span>${esc(travelCfg().vehicle)} km (selected types)</span><b>${fmtN(km,1)} km</b></div>`}
+    };
+    modal(`<h3>Import Timeline</h3>
+      <div class="hint" style="margin-bottom:8px">File has trips from <b>${fmtD(first)}</b> to <b>${fmtD(last)}</b>.</div>
+      <div class="g2"><div class="setf"><label>From</label><input class="sel" type="date" id="imf" value="${from}" min="${first}" max="${last}"></div><div class="setf"><label>To</label><input class="sel" type="date" id="imt" value="${last}" min="${first}" max="${last}"></div></div>
+      <div class="setf"><label>Count these trip types as ${esc(travelCfg().vehicle)} km</label><div class="opts" id="imtypes"></div></div>
+      <div class="calc" id="imsum"></div>
+      <div class="hint">Days in this range are replaced if imported before — nothing is counted twice. Manual km entries are kept.</div>
+      <div class="btns"><button class="btn b-gr" onclick="closeModal()">Cancel</button><button class="btn b-p" id="imgo">${I.upload}Import</button></div>`);
+    show();$('#imf').onchange=show;$('#imt').onchange=show;
+    $('#imgo').onclick=async()=>{
+      const fr=$('#imf').value||first,to=$('#imt').value||last;const on=$$('#imtypes .on').map(b=>b.dataset.t);
+      if(!on.length)return toast('Select at least one trip type');
+      const cfg=travelCfg();S.travel={...cfg,types:[...new Set([...cfg.types.filter(t=>!$$('#imtypes [data-t]').some(b=>b.dataset.t===t)),...on])]};saveS();
+      $('#imgo').disabled=true;$('#imgo').textContent='Saving…';
+      const byDay={};segs.filter(s=>s.day>=fr&&s.day<=to).forEach(s=>{(byDay[s.day]=byDay[s.day]||[]).push({s:s.s,e:s.e,type:s.type,km:s.km,...(s.est?{est:1}:{})})});
+      let n=0;
+      for(const [day,trips] of Object.entries(byDay)){
+        const id='tl-'+day,old=RECS.find(r=>r.id===id);
+        trips.sort((a,b)=>a.s<b.s?-1:1);
+        if(old&&!old.deleted)(old.data.trips||[]).forEach(t=>{if(t.x){const m=trips.find(x=>x.s===t.s&&x.type===t.type);if(m)m.x=1}});
+        await putRec({id,type:'travel',site:'',siteName:'',dt:day+'T23:59',user:S.user,email:ACCOUNT?ACCOUNT.email:'',createdAt:old?.createdAt||Date.now(),deleted:false,src:{},data:{kind:'timeline',day,trips,file:f.name}});n++;
+      }
+      await saveSiteConfig();
+      closeModal();toast(`${n} day(s) imported`);TV.month=to.slice(0,7);route();
+    };
+  };
+  inp.click();
+}
+
 /* ================= DASHBOARD ================= */
 function latestBySite(){
   return activeSites().map(s=>{const g=f=>{const h=fieldHist(s.id,f);return h[h.length-1]};const ds=recsOf(s.id,'diesel');return {s,fuel:g('fuel'),dg:g('dg'),kwh:g('kwh'),kvah:g('kvah'),last:ds[ds.length-1]}});
@@ -1434,16 +1750,16 @@ const HF={site:'',type:'',from:'',to:''};
 function filtered(){return live().filter(r=>(!HF.site||r.site===HF.site)&&(!HF.type||r.type===HF.type)&&(!HF.from||dayOf(r.dt)>=HF.from)&&(!HF.to||dayOf(r.dt)<=HF.to)).sort((a,b)=>b.dt<a.dt?-1:b.dt>a.dt?1:0)}
 function History(){
   const list=filtered();
-  const right=r=>r.type==='stock'?`${fmtN(r.data.qty,2)} L<br><small style="color:var(--m);font-weight:500">${r.data.kind==='transfer'?'→ '+esc(siteName(r.data.to)):SK[r.data.kind]?.s||''}</small>`:r.type==='diesel'?`${fmtN(r.data.closing,1)} L<br><small style="color:var(--m);font-weight:500">DG ${fmtN(r.data.dg)}</small>`:r.type==='energy'?`${fmtN(r.data.kwh)}<br><small style="color:var(--m);font-weight:500">kWh</small>`:`${fmtN(r.data.requirement,1)} L<br><small style="color:var(--m);font-weight:500">request</small>`;
+  const right=r=>r.type==='travel'?`${fmtN(r.data.kind==='timeline'?(r.data.trips||[]).filter(t=>travelCfg().types.includes(t.type)&&!t.x).reduce((s,t)=>s+t.km,0):r.data.km,1)} km<br><small style="color:var(--m);font-weight:500">${r.data.kind}</small>`:r.type==='fuel'?`${fmtN(r.data.litres,2)} L<br><small style="color:var(--m);font-weight:500">${fmtRs(r.data.amount)}</small>`:r.type==='stock'?`${fmtN(r.data.qty,2)} L<br><small style="color:var(--m);font-weight:500">${r.data.kind==='transfer'?'→ '+esc(siteName(r.data.to)):SK[r.data.kind]?.s||''}</small>`:r.type==='diesel'?`${fmtN(r.data.closing,1)} L<br><small style="color:var(--m);font-weight:500">DG ${fmtN(r.data.dg)}</small>`:r.type==='energy'?`${fmtN(r.data.kwh)}<br><small style="color:var(--m);font-weight:500">kWh</small>`:`${fmtN(r.data.requirement,1)} L<br><small style="color:var(--m);font-weight:500">request</small>`;
   render(header('History','')+`<div class="wrap">
     <div class="filters">
       <select class="sel" id="hs"><option value="">All sites</option>${S.sites.map(s=>`<option value="${s.id}" ${HF.site===s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select>
-      <select class="sel" id="ht"><option value="">All types</option>${[['diesel','Diesel Filling'],['energy','Energy Reading'],['request','Diesel Request'],['stock','Diesel Stock']].map(([k,l])=>`<option value="${k}" ${HF.type===k?'selected':''}>${l}</option>`).join('')}</select>
+      <select class="sel" id="ht"><option value="">All types</option>${[['diesel','Diesel Filling'],['energy','Energy Reading'],['request','Diesel Request'],['stock','Diesel Stock'],['travel','Travel'],['fuel','Petrol Fill-up']].map(([k,l])=>`<option value="${k}" ${HF.type===k?'selected':''}>${l}</option>`).join('')}</select>
       <input class="sel" type="date" id="hf" value="${HF.from}" title="From"><input class="sel" type="date" id="hto" value="${HF.to}" title="To">
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><small style="color:var(--m)">${list.length} record(s)</small>
     <button class="btn b-gr" style="flex:none;padding:8px 12px;font-size:13px" onclick="exportExcel(filtered())">${I.xls}Export Excel</button></div>
-    ${list.slice(0,300).map(r=>`<button class="rec" data-id="${r.id}"><span class="tg tg-${r.type}">${r.type.toUpperCase()}</span><span class="mid"><b>${esc(siteName(r.site))}</b><small>${fmtDT(r.dt)}${r.user?' · '+esc(r.user):''}${Object.values(r.src||{}).includes('EST')?' · has estimate':''}</small></span><span class="rt">${right(r)}</span></button>`).join('')||'<div class="empty">No records match the filter.</div>'}
+    ${list.slice(0,300).map(r=>`<button class="rec" data-id="${r.id}"><span class="tg tg-${r.type}">${r.type.toUpperCase()}</span><span class="mid"><b>${r.type==="travel"?"Travel":r.type==="fuel"?"Petrol fill-up":esc(siteName(r.site))}</b><small>${r.type==="travel"?fmtD(r.data.day):fmtDT(r.dt)}${r.user?' · '+esc(r.user):''}${Object.values(r.src||{}).includes('EST')?' · has estimate':''}</small></span><span class="rt">${right(r)}</span></button>`).join('')||'<div class="empty">No records match the filter.</div>'}
   </div>`,'history');
   const re=()=>{HF.site=$('#hs').value;HF.type=$('#ht').value;HF.from=$('#hf').value;HF.to=$('#hto').value;History()};
   ['#hs','#ht','#hf','#hto'].forEach(s=>$(s).onchange=re);
@@ -1452,6 +1768,8 @@ function History(){
 function recDetail(id){
   const r=RECS.find(x=>x.id===id);if(!r)return;
   if(r.type==='stock')return stockDetail(id);
+  if(r.type==='fuel')return addFill(id);
+  if(r.type==='travel')return r.data.kind==='manual'?addKm(id):dayTrips(r.data.day);
   const s=k=>{const v=(r.src||{})[k];return v&&v!=='MANUAL'?` <span class="badge bd-${v}">${v==='EST'?'EST':v}</span>`:''};
   let body='';
   if(r.type==='diesel'){const d=r.data;body=`<span>EB kWh</span><b>${fmtN(d.kwh)}${s('kwh')}</b><span>DG HMR</span><b>${fmtN(d.dg)}${s('dg')}</b><span>PIU HMR</span><b>${fmtN(d.piu)}${s('piu')}</b><span>Prev DG / date</span><b>${d.prev?fmtN(d.prev.dg)+' · '+fmtD(d.prev.dt):'—'}</b><span>Opening</span><b>${fmtN(d.opening,1)} L</b><span>Filled</span><b>${fmtN(d.filled,1)} L</b><span>DG hrs diff</span><b>${fmtN(d.dgDiff)}</b><span>Consumption</span><b>${fmtN(d.consumption,1)} L</b><span>Closing</span><b>${fmtN(d.closing,1)} L</b>`}
@@ -1504,6 +1822,17 @@ async function exportExcel(list){
       [...new Set(days.map(d=>d.slice(0,7)))].forEach(m=>{const t=monthSite(st.id,m);monthly.push([m,st.name,t.open,t.allocation,t.allocAmt,t.purchase,t.purchaseAmt,t.diffL,t.diffR,t.used,t.usedAmt,t.tin,t.tout,t.close,stState(t.close).t])})});
     add('Daily Stock Reports',['Date','Site','Opening (L)','Allocated (L)','Allocated (Rs)','Purchased (L)','Purchased (Rs)','Used (L)','Used (Rs approx)','Received (L)','Transferred Out (L)','Closing (L)','Difference till date (L)','Difference till date (Rs)','Status'],daily.sort((x,y)=>x[0]<y[0]?-1:1).map(r=>[fmtD(r[0]),...r.slice(1)]));
     add('Monthly Stock Reports',['Month','Site','Opening (L)','Allocated (L)','Allocated (Rs)','Purchased (L)','Purchased (Rs)','Difference (L)','Difference (Rs)','Used (L)','Used (Rs approx)','Received (L)','Transferred Out (L)','Closing (L)','Status'],monthly.sort((x,y)=>x[0]<y[0]?-1:1));
+  }
+  const tv=live().filter(r=>r.type==='travel'),fu=live().filter(r=>r.type==='fuel');
+  if(tv.length||fu.length){
+    const cfg=travelCfg();const days=[...new Set([...tv.map(r=>r.data.day),...fu.map(r=>dayOf(r.dt))])].sort();
+    const td=days.length?travelDays(days[0],days[days.length-1]):[];
+    add('Travel Daily',['Date','Timeline km','Manual km','Total km','Mileage (km/l)','Petrol est. (L)','Petrol price (Rs/L)','Petrol est. (Rs)','Filled (L)','Filled (Rs)'],td.map(d=>[fmtD(d.day),d.tl,d.man,d.km,cfg.mileage,d.estL,d.price,d.estR,d.fillL,d.fillR]));
+    const trips=[];tv.forEach(r=>{if(r.data.kind==='timeline')(r.data.trips||[]).forEach(t=>trips.push([r.data.day,t.s,t.e,typeLabel(t.type),t.km,cfg.types.includes(t.type)&&!t.x?'Yes':'No','Timeline'+(t.est?' (distance estimated)':''),'']));else trips.push([r.data.day,'','','Manual',+r.data.km,'Yes',r.data.odoStart!==''&&isNum(r.data.odoStart)?`Odometer ${r.data.odoStart}-${r.data.odoEnd}`:'Manual',r.data.purpose||''])});
+    add('Travel Trips',['Date','Start','End','Type','Km','Counted','Source','Purpose'],trips.sort((x,y)=>(x[0]+x[1])<(y[0]+y[1])?-1:1).map(t=>[fmtD(t[0]),...t.slice(1)]));
+    const RM=realMileage();
+    add('Petrol Fill-ups',['Date','Time','Litres','Price (Rs/L)','Amount (Rs)','Entered As','Odometer','Full Tank','Real Mileage (km/l)','Mileage Based On','Remarks'],fuelRecs().map(f=>{const d=f.data,m=RM.find(x=>x.id===f.id);return [fmtD(f.dt),f.dt.slice(11,16),n(d.litres),n(d.price),n(d.amount),d.mode==='amount'?'Rupees':'Litres',d.odo===''?'':n(d.odo),d.full===false?'No':'Yes',m?m.mileage:'',m?m.how:'',d.remarks||'']}));
+    add('Petrol Price History',['Effective From','Price (Rs/L)','Source / Changed By'],(S.petrolHistory||[]).slice().sort((x,y)=>x.from<y.from?-1:1).map(p=>[fmtD(p.from),+p.price,p.user||'']));
   }
   add('Diesel Price History',['Effective From','Price (Rs/L)','Source / Changed By'],(S.priceHistory||[]).slice().sort((x,y)=>x.from<y.from?-1:1).map(p=>[fmtD(p.from),+p.price,p.user||'']));
   XLSX.writeFile(wb,`FieldRecord_${dayOf(nowLocal())}.xlsx`);
@@ -1578,7 +1907,7 @@ function Settings(){
       <input type="file" id="s-impf" accept=".json" hidden>
       <div class="hint mt">${live().length} records on this phone · ${PENDING.size} waiting to sync</div></div>
     <div class="card"><h3>About</h3>
-      <div class="dl" style="margin:0"><span>App</span><b>Field Record</b><span>Version</span><b>1.2</b><span>Developer</span><b>Manu Brahma</b></div>
+      <div class="dl" style="margin:0"><span>App</span><b>Field Record</b><span>Version</span><b>1.3</b><span>Developer</span><b>Manu Brahma</b></div>
       <div class="note mt" style="margin-bottom:0"><b>Disclaimer:</b> Diesel consumption, requirement and estimated readings are calculated values. Always verify against actual meter and tank readings before submitting a diesel request. Values marked ESTIMATE / (Est.) are not actual meter readings.</div></div>
     ${footer(true)}
   </div>`,'settings');
