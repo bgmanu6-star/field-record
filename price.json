@@ -1,11 +1,11 @@
 {
  "area": "Kanyakumari district",
  "unit": "INR per litre",
- "updated": "2026-11-09T14:07+05:30",
+ "updated": "2026-11-10T14:18+05:30",
  "note": "Reference retail prices from public fuel-price pages; actual pump rate can differ slightly by oil company.",
  "diesel": {
   "price": 100.54,
-  "date": "2026-11-09",
+  "date": "2026-11-10",
   "source": "BusinessToday + AajTak",
   "confirmed": true,
   "all_sources": {
@@ -16,7 +16,7 @@
  },
  "petrol": {
   "price": 108.68,
-  "date": "2026-11-09",
+  "date": "2026-11-10",
   "source": "BusinessToday + AajTak",
   "confirmed": true,
   "all_sources": {
@@ -65,10 +65,15 @@
    "date": "2026-11-09",
    "diesel": 100.54,
    "petrol": 108.68
+  },
+  {
+   "date": "2026-11-10",
+   "diesel": 100.54,
+   "petrol": 108.68
   }
  ],
  "price": 100.54,
- "date": "2026-11-09",
+ "date": "2026-11-10",
  "source": "BusinessToday + AajTak",
  "confirmed": true
 }
