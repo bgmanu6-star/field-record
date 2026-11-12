@@ -878,20 +878,23 @@ function EnergyPage(sid){
 
 /* ================= DIESEL REQUEST ================= */
 const RF=[['kwh','EB kWh'],['kvah','EB kVAh'],['dg','DG HMR'],['piu','PIU HMR'],['fuel','Fuel level']];
-function buildSnapshot(sid){
+const reqDaysDefault=sid=>{const st=siteById(sid)||{};return isNum(st.reqDays)&&+st.reqDays>0?+st.reqDays:isNum(S.reqDays)&&+S.reqDays>0?+S.reqDays:30};
+/* o.curDay = use readings on/before this date; o.prevDay = exact previous date; o.days = how many days back */
+function buildSnapshot(sid,o={}){
   const H={};RF.forEach(([f])=>H[f]=fieldHist(sid,f));
   const cur={},prev={};
-  RF.forEach(([f])=>{const h=H[f];if(h.length)cur[f]=h[h.length-1]});
+  RF.forEach(([f])=>{const h=H[f];const c=o.curDay?lastBefore(h,o.curDay,true):h[h.length-1];if(c)cur[f]=c});
   const curDays=['dg','fuel'].map(f=>cur[f]?.day).filter(Boolean);
-  const curDay=curDays.length?curDays.sort().pop():Object.values(cur).map(x=>x.day).sort().pop();
+  const curDay=o.curDay||(curDays.length?curDays.sort().pop():Object.values(cur).map(x=>x.day).sort().pop());
   if(!curDay)return null;
-  const target=addDays(curDay,-30);let fallback=false;
-  RF.forEach(([f])=>{let p=lastBefore(H[f],target,true);if(!p){p=H[f].find(x=>x.day<curDay)||null;if(p)fallback=true}if(p)prev[f]=p});
+  const days=o.days||reqDaysDefault(sid);
+  const target=o.prevDay||addDays(curDay,-days);let fallback=false;
+  RF.forEach(([f])=>{let p=lastBefore(H[f],target,true);if(p&&p.day>=curDay)p=null;if(!p&&!o.prevDay){p=H[f].find(x=>x.day<curDay)||null;if(p)fallback=true}if(p)prev[f]=p});
   const prevDays=['dg','fuel'].map(f=>prev[f]?.day).filter(Boolean);
   const prevDay=prevDays.length?prevDays.sort().pop():Object.values(prev).map(x=>x.day).sort().pop()||'';
   const fills=recsOf(sid,'diesel').filter(r=>prevDay&&dayOf(r.dt)>prevDay&&dayOf(r.dt)<=curDay&&+r.data.filled>0);
   const filled=r2(fills.reduce((s,r)=>s+(+r.data.filled||0),0));
-  return {curDay,prevDay,target,fallback,filled,fills:fills.length,
+  return {curDay,prevDay,target,days,exactPrev:!!o.prevDay,fallback,filled,fills:fills.length,
     cur:Object.fromEntries(RF.map(([f])=>[f,cur[f]?{v:cur[f].v,src:cur[f].src}:{v:'',src:''}])),
     prev:Object.fromEntries(RF.map(([f])=>[f,prev[f]?{v:prev[f].v,src:prev[f].src}:{v:'',src:''}]))};
 }
@@ -920,15 +923,21 @@ function reqMessage(sid,R,C){
   return L.join('\n');
 }
 let MSG=null;
-function RequestPage(sid){
+function RequestPage(sid,o={}){
   const site=siteById(sid);if(!site)return SiteList('request');
-  const R=buildSnapshot(sid);
+  const R=buildSnapshot(sid,o);
   if(!R){render(header('Diesel Request - '+site.name,'#/request')+`<div class="wrap"><div class="empty">No saved readings for ${esc(site.name)} yet.<br><br>Save a Diesel Filling record (and an Energy Reading for kVAh) first.</div><button class="btn b-g" onclick="location.hash='#/diesel/${sid}'">Go to Diesel Filling</button></div>`,'home');return}
   const box=(k,cls,title,day)=>`<div class="cbox ${cls}"><h4>${title}</h4><div class="d"><input type="date" id="d-${k}" value="${day||''}" style="border:0;background:transparent;font:inherit;font-weight:800;width:100%;padding:0"></div>
     ${RF.map(([f,l])=>`<div class="kv"><span>${l}${f==='fuel'?' (L)':''}</span><input type="number" step="any" inputmode="decimal" data-rk="${k}" data-rf="${f}" value="${isNum(R[k][f].v)?R[k][f].v:''}" class="${!isNum(R[k][f].v)?'miss':R[k][f].src==='EST'?'est':''}" placeholder="needed"></div>`).join('')}</div>`;
   render(header('Diesel Request - '+site.name,'#/request')+`<div class="wrap">
     <div id="missing"></div>
-    ${R.fallback?`<div class="note">No reading found 30 days back (on/before ${fmtD(R.target)}). Using the oldest available earlier reading instead.</div>`:''}
+    <div class="card" style="padding:12px;margin-bottom:12px"><div class="lbl" style="margin-bottom:8px">Compare with readings from</div>
+      <div class="opts" style="margin:0 0 8px">${[7,10,15,20,30,45,60].map(d=>`<button data-rd="${d}" class="${!R.exactPrev&&R.days===d?'on':''}">${d} days</button>`).join('')}</div>
+      <div class="row" style="align-items:center"><input class="sel" id="rdays" type="number" min="1" max="365" inputmode="numeric" value="${R.exactPrev?'':R.days}" placeholder="Other" style="max-width:100px"><span style="font-size:14px">days before current reading</span></div>
+      <div class="hint" style="margin-top:8px">Period used: <b>${R.prevDay?fmtD(R.prevDay):'—'} → ${fmtD(R.curDay)}</b>${R.prevDay?` = <b>${Math.round(daysBetween(R.prevDay,R.curDay))} days</b>`:''}. You can also pick any date in the boxes below.</div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:8px"><input type="checkbox" id="rdef" style="width:18px;height:18px"> Use ${R.exactPrev?'this period':R.days+' days'} as default for ${esc(site.name)}</label></div>
+    ${R.fallback?`<div class="note">No reading found ${R.days} days back (on/before ${fmtD(R.target)}). Using the oldest available earlier reading instead.</div>`:''}
+    ${R.exactPrev&&!R.prevDay?`<div class="note">No reading on or before ${fmtD(R.target)}. Pick a later previous date or fewer days.</div>`:''}
     <div class="cmp">${box('cur','c','Current Reading',R.curDay)}${box('prev','p','Previous Reading',R.prevDay)}</div>
     <div class="field"><div class="lbl">Diesel filled between these dates (L)</div><input class="inp sm" id="r-filled" type="number" step="any" inputmode="decimal" value="${R.filled}"><div class="hint">${R.fills} filling record(s) found in Diesel Filling history. Edit only if a filling was not recorded.</div></div>
     <div class="sum" id="sum"></div>
@@ -956,8 +965,12 @@ function RequestPage(sid){
   }
   upd();
   $$('[data-rk]').forEach(el=>el.oninput=()=>{R[el.dataset.rk][el.dataset.rf]={v:isNum(el.value)?+el.value:'',src:'MANUAL'};el.classList.toggle('miss',!isNum(el.value));el.classList.remove('est');upd()});
-  $('#d-cur').onchange=e=>{R.curDay=e.target.value;upd()};
-  $('#d-prev').onchange=e=>{R.prevDay=e.target.value;upd()};
+  const keep={curDay:o.curDay};
+  $$('[data-rd]').forEach(b=>b.onclick=()=>RequestPage(sid,{...keep,days:+b.dataset.rd}));
+  $('#rdays').onchange=e=>{const d=Math.round(+e.target.value);if(d>0&&d<=365)RequestPage(sid,{...keep,days:d});else toast('Enter 1 to 365 days')};
+  $('#d-cur').onchange=e=>{const v=e.target.value;if(!v)return;RequestPage(sid,R.exactPrev?{curDay:v,prevDay:R.target<v?R.target:undefined}:{curDay:v,days:R.days})};
+  $('#d-prev').onchange=e=>{const v=e.target.value;if(!v)return;if(v>=R.curDay)return toast('Previous date must be before the current date');RequestPage(sid,{...keep,curDay:R.curDay,prevDay:v})};
+  $('#rdef').onchange=async e=>{if(!e.target.checked)return;const d=R.exactPrev&&R.prevDay?Math.round(daysBetween(R.prevDay,R.curDay)):R.days;site.reqDays=d;await saveSiteConfig();toast(`${site.name}: default ${d} days`)};
   $('#r-filled').oninput=e=>{R.filled=+e.target.value||0;upd()};
   $('#gen').onclick=async()=>{
     const C=upd();const text=reqMessage(sid,R,C);
