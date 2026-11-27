@@ -364,17 +364,40 @@ function lastRecBefore(sid,type,day){const a=recsOf(sid,type).filter(r=>dayOf(r.
 function sameDayRec(sid,type,day){return recsOf(sid,type).find(r=>dayOf(r.dt)===day)}
 
 /* estimate a cumulative meter value at time dt from history */
+/* Estimate a meter reading (kWh, kVAh, DG/PIU hours) for date-time dt.
+   - starts from the latest reading before dt (actual or estimated, whichever is newest)
+   - if an actual reading exists AFTER dt, the value is interpolated between the two
+   - otherwise daily average = (last − reference) ÷ days, where the reference is an earlier
+     ACTUAL reading about a month back (7–180 days, nearest to 30), not higher than the last one
+   - readings that go backwards (typing mistake / meter reset) are ignored, and the
+     result is never lower than the last reading */
 function estimateField(sid,f,dt){
-  let h=fieldHist(sid,f,{actualOnly:true}).filter(x=>x.dt<dt);
-  if(!h.length)return null;
-  const last=h[h.length-1];
-  const win=h.filter(x=>daysBetween(x.dt,last.dt)<=120);
-  const first=win[0];const span=daysBetween(first.dt,last.dt);
-  const rate=span>=0.5?(last.v-first.v)/span:0;
+  const all=fieldHist(sid,f);
+  const before=all.filter(x=>x.dt<dt);
+  if(!before.length)return null;
+  const notes=[];const last=before[before.length-1];
+  const gap=(a,b)=>daysBetween(a.dt,b.dt);
+  const rnd=v=>(f==='kwh'||f==='kvah')?Math.round(v):Math.round(v*10)/10;
+  if(last.src==='EST')notes.push(`The last reading (${fmtN(last.v)} on ${fmtD(last.dt)}) was itself an estimate.`);
+  const higher=before.filter(x=>x!==last&&x.v>last.v);
+  if(higher.length)notes.push(`${higher.length} earlier reading(s) are higher than the last reading (typing mistake or meter reset?) — they were not used. Highest: ${fmtN(Math.max(...higher.map(x=>x.v)))} on ${fmtD(higher.reduce((m,x)=>x.v>m.v?x:m).dt)}.`);
+  // 1) a real reading exists after the chosen date → interpolate
+  const next=all.find(x=>x.dt>dt&&x.src!=='EST'&&x.v>=last.v&&gap(last,x)>0);
+  if(next){
+    const rate=(next.v-last.v)/gap(last,next),el=Math.max(0,daysBetween(last.dt,dt));
+    return {method:'between',last,next,rate,elapsed:el,est:rnd(Math.min(next.v,Math.max(last.v,last.v+rate*el))),notes};
+  }
+  // 2) daily average from a reading about a month earlier
+  const ok=x=>x!==last&&x.v<=last.v;
+  let cands=before.filter(x=>ok(x)&&x.src!=='EST'&&gap(x,last)>=7&&gap(x,last)<=180);
+  if(!cands.length)cands=before.filter(x=>ok(x)&&gap(x,last)>=7&&gap(x,last)<=180);
+  if(!cands.length)cands=before.filter(x=>ok(x)&&gap(x,last)>=1);
+  const ref=cands.sort((a,b)=>Math.abs(gap(a,last)-30)-Math.abs(gap(b,last)-30))[0]||null;
+  const rate=ref?Math.max(0,(last.v-ref.v)/gap(ref,last)):0;
+  if(!ref)notes.push('Only one usable reading, so there is no daily average yet — the estimate equals the last reading. Save one more actual reading to improve it.');
+  else if(ref.src==='EST')notes.push('The daily average uses an estimated reading because no actual reading was found 7–180 days earlier.');
   const el=Math.max(0,daysBetween(last.dt,dt));
-  let est=last.v+rate*el;
-  est=(f==='kwh'||f==='kvah')?Math.round(est):Math.round(est*10)/10;
-  return {last,rate,elapsed:el,est,points:win.length};
+  return {method:'average',last,ref,rate,elapsed:el,est:rnd(Math.max(last.v,last.v+rate*el)),notes};
 }
 function opHist(sid,op,ch,f){
   const out=[];recsOf(sid,'energy').forEach(r=>{const c=r.data.ops?.[op]?.[ch];if(!c||!isNum(c[f]))return;const src=(r.src||{})[`${op}.${ch}.${f}`]||'MANUAL';if(src==='EST')return;out.push({dt:r.dt,v:+c[f]})});return out;
@@ -696,11 +719,20 @@ function openOCR(title,cb,choices){
 /* estimate dialog */
 function showEstimate(sid,key,label,dt,cb){
   const e=estimateField(sid,key,dt);
-  if(!e)return toast('No previous actual reading for this site to estimate from');
+  if(!e)return toast('No previous reading for this site to estimate from');
+  const tag=x=>x.src==='EST'?' <span class="badge bd-EST">EST</span>':'';
+  const rows=e.method==='between'
+    ?`<span>Reading before</span><b>${fmtN(e.last.v)}${tag(e.last)}<br><small>${fmtDT(e.last.dt)}</small></b>
+      <span>Reading after</span><b>${fmtN(e.next.v)}<br><small>${fmtDT(e.next.dt)}</small></b>
+      <span>Average per day</span><b>${fmtN(e.rate,2)}</b><span>Days after first reading</span><b>${fmtN(e.elapsed,1)}</b>`
+    :`<span>Last reading</span><b>${fmtN(e.last.v)}${tag(e.last)}<br><small>${fmtDT(e.last.dt)}</small></b>
+      ${e.ref?`<span>Compared with</span><b>${fmtN(e.ref.v)}${tag(e.ref)}<br><small>${fmtDT(e.ref.dt)}</small></b>
+      <span>Used in that period</span><b>+${fmtN(e.last.v-e.ref.v)} in ${fmtN(daysBetween(e.ref.dt,e.last.dt),1)} days</b>`:''}
+      <span>Average per day</span><b>${e.ref?fmtN(e.rate,2):'—'}</b><span>Days since last reading</span><b>${fmtN(e.elapsed,1)}</b>`;
   modal(`<h3>Estimate ${esc(label)}</h3>
-  <div class="dl"><span>Previous reading</span><b>${fmtN(e.last.v)}</b><span>Previous date</span><b>${fmtDT(e.last.dt)}</b>
-  <span>Average per day</span><b>${e.points>1?fmtN(e.rate,2):'— (only 1 reading)'}</b><span>Days elapsed</span><b>${fmtN(e.elapsed,1)}</b></div>
-  <div class="bigv o"><div style="font-size:12px;color:var(--m)">Estimated reading</div><b>${fmtN(e.est)}</b></div>
+  <div class="dl">${rows}</div>
+  <div class="bigv o"><div style="font-size:12px;color:var(--m)">Estimated reading for ${fmtD(dt)}</div><b>${fmtN(e.est)}</b><div style="font-size:12px;color:var(--m)">${e.method==='between'?'between the two readings':`= ${fmtN(e.last.v)} + ${fmtN(e.rate,2)} × ${fmtN(e.elapsed,1)} days`}</div></div>
+  ${e.notes.map(n=>`<div class="warn" style="font-weight:500">${I.alert}<span>${esc(n)}</span></div>`).join('')}
   <div class="note">This value will be saved and marked as <b>ESTIMATE</b>, never as an actual meter reading.</div>
   <div class="btns"><button class="btn b-gr" onclick="closeModal()">Cancel</button><button class="btn b-o" id="useEst">Use Estimated Value</button></div>`);
   $('#useEst').onclick=()=>{closeModal();cb(e.est)};
